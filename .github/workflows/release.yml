@@ -57,12 +57,13 @@ jobs:
           fetch-depth: 0
 
       # The repository has no GitHub releases yet, so GitHub would generate notes from the very
-      # first commit; start from the latest ADT-* (or old ADT-CI-*) tag before this commit instead
+      # first commit; start from the latest ADT-* (or old ADT-CI-*) tag before this commit instead.
+      # Searched from the parent, so a tag on this same commit (e.g. from the ADO build) is skipped.
       - name: Find previous release tag
         id: previous
         shell: pwsh
         run: |
-          $tag = git describe --tags --abbrev=0 --match "ADT-*" "${{ steps.run.outputs.SHA }}" 2>$null
+          $tag = git describe --tags --abbrev=0 --match "ADT-*" "${{ steps.run.outputs.SHA }}^" 2>$null
           if ($LASTEXITCODE -ne 0) { $tag = ''; $global:LASTEXITCODE = 0 }
           "TAG=$tag" >> $env:GITHUB_OUTPUT
           Write-Host "Previous release tag: $tag"
