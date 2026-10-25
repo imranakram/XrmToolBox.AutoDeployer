@@ -102,7 +102,7 @@
             this.bSave.Name = "bSave";
             this.bSave.Size = new System.Drawing.Size(68, 28);
             this.bSave.Text = "Save...";
-            this.bSave.ToolTipText = "Save list of watched files to can get opened for next time.";
+            this.bSave.ToolTipText = "Save the list of watched files so it can be opened again later.";
             this.bSave.Click += new System.EventHandler(this.bSave_Click);
             // 
             // toolStripSeparator1

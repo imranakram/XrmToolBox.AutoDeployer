@@ -87,8 +87,15 @@ namespace XrmToolBox.AutoDeployer
 
         public void Dispose()
         {
+            // Watcher is null when the assembly/web resource was not found in Dataverse
+            if (Watcher == null)
+            {
+                return;
+            }
+            Watcher.EnableRaisingEvents = false;
             Watcher.Changed -= Plugin_Changed;
             Watcher.Created -= Plugin_Changed;
+            Watcher.Dispose();
         }
 
         #endregion Public Methods

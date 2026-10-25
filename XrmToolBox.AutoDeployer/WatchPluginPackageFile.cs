@@ -5,6 +5,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using System.Windows.Forms;
 using Microsoft.Xrm.Sdk;
+using Microsoft.Xrm.Sdk.Query;
 
 namespace XrmToolBox.AutoDeployer
 {
@@ -305,8 +306,24 @@ namespace XrmToolBox.AutoDeployer
                     AppendLog("File updated");
                     UpdateList();
 
-                    // Your upload call (sync) - ok to call from here
-                    UploadPluginPackageNupkg(service, item.PackageId, fullPath);
+                    try
+                    {
+                        UploadPluginPackageNupkg(service, item.PackageId, fullPath);
+                    }
+                    catch (Exception) when (!PackageExists(item.PackageId))
+                    {
+                        // Package ids normally match across environments when deployed via solutions.
+                        // If not (e.g. watch came from a project file saved elsewhere), find the package by name.
+                        var resolvedId = FindPackageIdByName(item.PackageName);
+                        if (resolvedId == Guid.Empty)
+                        {
+                            throw new InvalidOperationException(
+                                $"Plugin package '{item.PackageName}' ({item.PackageId}) does not exist in this environment. Remove it and add it again to select the right package.");
+                        }
+                        AppendLog($"Package id {item.PackageId} not found, using '{item.PackageName}' ({resolvedId}) found by name");
+                        item.PackageId = resolvedId;
+                        UploadPluginPackageNupkg(service, item.PackageId, fullPath);
+                    }
 
                     PluginUpdated = DateTime.Now;
                     Status = "Update ok";
@@ -343,7 +360,45 @@ namespace XrmToolBox.AutoDeployer
             }
         }
 
+        private Guid FindPackageIdByName(string name)
+        {
+            if (string.IsNullOrWhiteSpace(name))
+            {
+                return Guid.Empty;
+            }
+
+            var qe = new QueryExpression("pluginpackage")
+            {
+                ColumnSet = new ColumnSet(false),
+                TopCount = 2
+            };
+            qe.Criteria.AddCondition("name", ConditionOperator.Equal, name);
+
+            // Only trust an unambiguous match
+            var found = service.RetrieveMultiple(qe).Entities;
+            return found.Count == 1 ? found[0].Id : Guid.Empty;
+        }
+
         private void OnChanged() => Changed?.Invoke(this, EventArgs.Empty);
+
+        private bool PackageExists(Guid packageId)
+        {
+            try
+            {
+                var qe = new QueryExpression("pluginpackage")
+                {
+                    ColumnSet = new ColumnSet(false),
+                    TopCount = 1
+                };
+                qe.Criteria.AddCondition("pluginpackageid", ConditionOperator.Equal, packageId);
+                return service.RetrieveMultiple(qe).Entities.Count > 0;
+            }
+            catch
+            {
+                // Can't tell, so let the original upload error surface
+                return true;
+            }
+        }
 
         private void OnFileChanged(object sender, FileSystemEventArgs e)
         {
