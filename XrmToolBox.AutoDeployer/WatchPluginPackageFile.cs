@@ -90,6 +90,7 @@ namespace XrmToolBox.AutoDeployer
         public string Log { get; private set; } = "";
         public string Path { get; }
         public Guid PluginPackageId => item.PackageId;
+        public string PluginPackageName => item.PackageName;
         public DateTime PluginUpdated { get; private set; }
         public string Status { get; private set; }
         public FileSystemWatcher Watcher { get; private set; }
@@ -101,7 +102,9 @@ namespace XrmToolBox.AutoDeployer
         public void Dispose()
         {
             if (Interlocked.Exchange(ref _disposed, 1) == 1)
+            {
                 return; // already disposed
+            }
 
             // Cancel + dispose debounce CTS safely
             var cts = Interlocked.Exchange(ref _debounceCts, null);
@@ -134,7 +137,9 @@ namespace XrmToolBox.AutoDeployer
                 // 16 bytes => base64 like "xxxxxxxxxxxxxxxxxxxxxx=="
                 var s = Convert.ToBase64String(Guid.NewGuid().ToByteArray());
                 if (s.IndexOf('+') < 0 && s.IndexOf('/') < 0)
+                {
                     return s;
+                }
             }
         }
 
@@ -147,7 +152,11 @@ namespace XrmToolBox.AutoDeployer
                 while (read < buffer.Length)
                 {
                     int n = fs.Read(buffer, read, buffer.Length - read);
-                    if (n <= 0) break;
+                    if (n <= 0)
+                    {
+                        break;
+                    }
+
                     read += n;
                 }
                 return buffer;
@@ -241,27 +250,39 @@ namespace XrmToolBox.AutoDeployer
         private async Task HandleFileChangedAsync(string fullPath, int myVersion, CancellationToken token)
         {
             if (Volatile.Read(ref _disposed) == 1)
+            {
                 return;
+            }
+
             try
             {
                 if (Volatile.Read(ref _disposed) == 1)
+                {
                     return;
+                }
 
                 if (myVersion != _changeVersion)
+                {
                     return;
+                }
 
                 // Debounce multiple rapid change events
                 await Task.Delay(DebounceMs, token);
 
                 // Another change happened after this one -> ignore
                 if (myVersion != _changeVersion)
+                {
                     return;
+                }
 
                 await WaitForFileReadyAsync(fullPath, token);
 
                 var lastWriteTime = System.IO.File.GetLastWriteTime(fullPath);
                 if (lastWriteTime == FileUpdated)
+                {
                     return;
+                }
+
                 bool shouldPersist = false;
 
                 await _uploadGate.WaitAsync(token);
@@ -269,11 +290,15 @@ namespace XrmToolBox.AutoDeployer
                 {
                     // Re-check again after acquiring lock
                     if (myVersion != _changeVersion)
+                    {
                         return;
+                    }
 
                     lastWriteTime = System.IO.File.GetLastWriteTime(fullPath);
                     if (lastWriteTime == FileUpdated)
+                    {
                         return;
+                    }
 
                     FileUpdated = lastWriteTime;
                     Status = "Updating package...";
@@ -323,7 +348,9 @@ namespace XrmToolBox.AutoDeployer
         private void OnFileChanged(object sender, FileSystemEventArgs e)
         {
             if (Volatile.Read(ref _disposed) == 1)
+            {
                 return;
+            }
 
             var fullPath = e.FullPath;
 
@@ -341,7 +368,9 @@ namespace XrmToolBox.AutoDeployer
             // If Dispose ran right after Exchange, _debounceCts could already be null
             var cts = _debounceCts;
             if (cts == null || Volatile.Read(ref _disposed) == 1)
+            {
                 return;
+            }
 
             var token = cts.Token;
 
@@ -353,10 +382,19 @@ namespace XrmToolBox.AutoDeployer
         {
             try
             {
-                if (owner.IsDisposed || !owner.IsHandleCreated) return;
+                if (owner.IsDisposed || !owner.IsHandleCreated)
+                {
+                    return;
+                }
 
-                if (owner.InvokeRequired) owner.BeginInvoke(new Action(_persist));
-                else _persist();
+                if (owner.InvokeRequired)
+                {
+                    owner.BeginInvoke(new Action(_persist));
+                }
+                else
+                {
+                    _persist();
+                }
             }
             catch (Exception ex)
             {
@@ -370,7 +408,9 @@ namespace XrmToolBox.AutoDeployer
             MethodInvoker mi = delegate
             {
                 while (ListItem.SubItems.Count < 5)
+                {
                     ListItem.SubItems.Add(string.Empty);
+                }
 
                 var title = string.IsNullOrWhiteSpace(item.PackageName)
                     ? item.PackageId.ToString("D")
@@ -385,10 +425,19 @@ namespace XrmToolBox.AutoDeployer
                 OnChanged();
             };
 
-            if (owner.IsDisposed || !owner.IsHandleCreated) return;
+            if (owner.IsDisposed || !owner.IsHandleCreated)
+            {
+                return;
+            }
 
-            if (owner.InvokeRequired) owner.BeginInvoke(mi);   // <-- change Invoke -> BeginInvoke
-            else mi();
+            if (owner.InvokeRequired)
+            {
+                owner.BeginInvoke(mi);   // <-- change Invoke -> BeginInvoke
+            }
+            else
+            {
+                mi();
+            }
         }
 
         #endregion Private Methods

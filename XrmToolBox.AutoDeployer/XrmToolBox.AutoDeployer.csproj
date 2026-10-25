@@ -79,6 +79,7 @@
     <Compile Include="About.Designer.cs">
       <DependentUpon>About.cs</DependentUpon>
     </Compile>
+    <Compile Include="Project.cs" />
     <Compile Include="Constants.cs" />
     <Compile Include="DataverseFileUpload.cs" />
     <Compile Include="Destination.cs" />
@@ -137,6 +138,9 @@
     <Content Include="ADT.ico" />
     <Content Include="Resources\assembly.png" />
     <Content Include="Resources\AutoDeployerTool_128.png" />
+    <None Include="Resources\folder-24.png" />
+    <None Include="Resources\disk.png" />
+    <None Include="Resources\package-24.png" />
     <Content Include="Resources\PluginPackage.png" />
     <Content Include="Resources\WebResource.png" />
     <None Include="Resources\delete2.png" />

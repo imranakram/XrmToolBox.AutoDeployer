@@ -30,11 +30,16 @@
         {
             System.ComponentModel.ComponentResourceManager resources = new System.ComponentModel.ComponentResourceManager(typeof(MainControl));
             this.tsMenu = new System.Windows.Forms.ToolStrip();
+            this.bProject = new System.Windows.Forms.ToolStripDropDownButton();
+            this.bOpen = new System.Windows.Forms.ToolStripButton();
+            this.bSave = new System.Windows.Forms.ToolStripButton();
+            this.toolStripSeparator1 = new System.Windows.Forms.ToolStripSeparator();
             this.bAdd = new System.Windows.Forms.ToolStripDropDownButton();
             this.bAddPluginMenuItem = new System.Windows.Forms.ToolStripMenuItem();
             this.bAddWebResourceMenuItem = new System.Windows.Forms.ToolStripMenuItem();
-            this.pluginPackageToolStripMenuItem = new System.Windows.Forms.ToolStripMenuItem();
+            this.bAddPackageMenuItem = new System.Windows.Forms.ToolStripMenuItem();
             this.bDelSelected = new System.Windows.Forms.ToolStripButton();
+            this.toolStripSeparator2 = new System.Windows.Forms.ToolStripSeparator();
             this.tsWrSummary = new System.Windows.Forms.ToolStripLabel();
             this.ofdPlugin = new System.Windows.Forms.OpenFileDialog();
             this.listWatching = new System.Windows.Forms.ListView();
@@ -56,8 +61,11 @@
             // 
             this.tsMenu.ImageScalingSize = new System.Drawing.Size(24, 24);
             this.tsMenu.Items.AddRange(new System.Windows.Forms.ToolStripItem[] {
+            this.bProject,
+            this.toolStripSeparator1,
             this.bAdd,
             this.bDelSelected,
+            this.toolStripSeparator2,
             this.tsWrSummary});
             this.tsMenu.Location = new System.Drawing.Point(0, 0);
             this.tsMenu.Name = "tsMenu";
@@ -65,12 +73,49 @@
             this.tsMenu.TabIndex = 0;
             this.tsMenu.Text = "toolStrip1";
             // 
+            // bProject
+            // 
+            this.bProject.DropDownItems.AddRange(new System.Windows.Forms.ToolStripItem[] {
+            this.bOpen,
+            this.bSave});
+            this.bProject.Image = global::XrmToolBox.AutoDeployer.Properties.Resources.package_24;
+            this.bProject.ImageTransparentColor = System.Drawing.Color.Magenta;
+            this.bProject.Name = "bProject";
+            this.bProject.Size = new System.Drawing.Size(81, 28);
+            this.bProject.Text = "Project";
+            this.bProject.ToolTipText = "Project is where we can store assemblies and packages to be opened easily.";
+            // 
+            // bOpen
+            // 
+            this.bOpen.Image = global::XrmToolBox.AutoDeployer.Properties.Resources.folder_24;
+            this.bOpen.ImageTransparentColor = System.Drawing.Color.Magenta;
+            this.bOpen.Name = "bOpen";
+            this.bOpen.Size = new System.Drawing.Size(73, 28);
+            this.bOpen.Text = "Open...";
+            this.bOpen.ToolTipText = "Open stored Auto Deployer files to watch.";
+            this.bOpen.Click += new System.EventHandler(this.bOpen_Click);
+            // 
+            // bSave
+            // 
+            this.bSave.Image = global::XrmToolBox.AutoDeployer.Properties.Resources.disk;
+            this.bSave.ImageTransparentColor = System.Drawing.Color.Magenta;
+            this.bSave.Name = "bSave";
+            this.bSave.Size = new System.Drawing.Size(68, 28);
+            this.bSave.Text = "Save...";
+            this.bSave.ToolTipText = "Save list of watched files to can get opened for next time.";
+            this.bSave.Click += new System.EventHandler(this.bSave_Click);
+            // 
+            // toolStripSeparator1
+            // 
+            this.toolStripSeparator1.Name = "toolStripSeparator1";
+            this.toolStripSeparator1.Size = new System.Drawing.Size(6, 31);
+            // 
             // bAdd
             // 
             this.bAdd.DropDownItems.AddRange(new System.Windows.Forms.ToolStripItem[] {
             this.bAddPluginMenuItem,
             this.bAddWebResourceMenuItem,
-            this.pluginPackageToolStripMenuItem});
+            this.bAddPackageMenuItem});
             this.bAdd.Image = global::XrmToolBox.AutoDeployer.Properties.Resources.navigate_plus;
             this.bAdd.ImageTransparentColor = System.Drawing.Color.Magenta;
             this.bAdd.Name = "bAdd";
@@ -83,7 +128,7 @@
             // 
             this.bAddPluginMenuItem.Image = global::XrmToolBox.AutoDeployer.Properties.Resources.assembly;
             this.bAddPluginMenuItem.Name = "bAddPluginMenuItem";
-            this.bAddPluginMenuItem.Size = new System.Drawing.Size(188, 30);
+            this.bAddPluginMenuItem.Size = new System.Drawing.Size(162, 22);
             this.bAddPluginMenuItem.Text = "Plugin Assembly";
             this.bAddPluginMenuItem.Click += new System.EventHandler(this.bAddPluginMenuItem_Click);
             // 
@@ -91,17 +136,17 @@
             // 
             this.bAddWebResourceMenuItem.Image = global::XrmToolBox.AutoDeployer.Properties.Resources.webresource;
             this.bAddWebResourceMenuItem.Name = "bAddWebResourceMenuItem";
-            this.bAddWebResourceMenuItem.Size = new System.Drawing.Size(188, 30);
+            this.bAddWebResourceMenuItem.Size = new System.Drawing.Size(162, 22);
             this.bAddWebResourceMenuItem.Text = "Web Resources";
             this.bAddWebResourceMenuItem.Click += new System.EventHandler(this.bAddWebResourceMenuItem_Click);
             // 
-            // pluginPackageToolStripMenuItem
+            // bAddPackageMenuItem
             // 
-            this.pluginPackageToolStripMenuItem.Image = global::XrmToolBox.AutoDeployer.Properties.Resources.pluginpackage;
-            this.pluginPackageToolStripMenuItem.Name = "pluginPackageToolStripMenuItem";
-            this.pluginPackageToolStripMenuItem.Size = new System.Drawing.Size(188, 30);
-            this.pluginPackageToolStripMenuItem.Text = "Plugin Package";
-            this.pluginPackageToolStripMenuItem.Click += new System.EventHandler(this.pluginPackageToolStripMenuItem_Click);
+            this.bAddPackageMenuItem.Image = global::XrmToolBox.AutoDeployer.Properties.Resources.pluginpackage;
+            this.bAddPackageMenuItem.Name = "bAddPackageMenuItem";
+            this.bAddPackageMenuItem.Size = new System.Drawing.Size(162, 22);
+            this.bAddPackageMenuItem.Text = "Plugin Package";
+            this.bAddPackageMenuItem.Click += new System.EventHandler(this.bAddPackageMenuItem_Click);
             // 
             // bDelSelected
             // 
@@ -113,6 +158,11 @@
             this.bDelSelected.Text = "Remove selected";
             this.bDelSelected.ToolTipText = "Remove selected plugin or web resource";
             this.bDelSelected.Click += new System.EventHandler(this.bDelSelected_Click);
+            // 
+            // toolStripSeparator2
+            // 
+            this.toolStripSeparator2.Name = "toolStripSeparator2";
+            this.toolStripSeparator2.Size = new System.Drawing.Size(6, 31);
             // 
             // tsWrSummary
             // 
@@ -236,6 +286,11 @@
         private System.Windows.Forms.SplitContainer splitContainer1;
         private System.Windows.Forms.TextBox txtLog;
         private System.Windows.Forms.ToolStripLabel tsWrSummary;
-        private System.Windows.Forms.ToolStripMenuItem pluginPackageToolStripMenuItem;
+        private System.Windows.Forms.ToolStripMenuItem bAddPackageMenuItem;
+        private System.Windows.Forms.ToolStripButton bOpen;
+        private System.Windows.Forms.ToolStripButton bSave;
+        private System.Windows.Forms.ToolStripSeparator toolStripSeparator1;
+        private System.Windows.Forms.ToolStripSeparator toolStripSeparator2;
+        private System.Windows.Forms.ToolStripDropDownButton bProject;
     }
 }
