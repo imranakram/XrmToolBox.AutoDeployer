@@ -396,20 +396,31 @@ namespace XrmToolBox.AutoDeployer
 
         private void Persist()
         {
+            // The save callback holds the package list this watcher was created from. Once the watcher is
+            // disposed (watchers replaced, connection changed), saving it would bring back removed watches,
+            // so check before queueing and again when the queued save runs.
+            Action persistIfAlive = () =>
+            {
+                if (Volatile.Read(ref _disposed) == 0)
+                {
+                    _persist();
+                }
+            };
+
             try
             {
-                if (owner.IsDisposed || !owner.IsHandleCreated)
+                if (Volatile.Read(ref _disposed) == 1 || owner.IsDisposed || !owner.IsHandleCreated)
                 {
                     return;
                 }
 
                 if (owner.InvokeRequired)
                 {
-                    owner.BeginInvoke(new Action(_persist));
+                    owner.BeginInvoke(persistIfAlive);
                 }
                 else
                 {
-                    _persist();
+                    persistIfAlive();
                 }
             }
             catch (Exception ex)

@@ -19,6 +19,10 @@
         private readonly List<WatchPluginPackageFile> _packageWatchers = new List<WatchPluginPackageFile>();
         private readonly List<WatchWebResourceFile> _webResourceWatchers = new List<WatchWebResourceFile>();
 
+        // Bumped on every connection change, so a plugin package support check that finishes after
+        // switching connection knows its result is about the previous one
+        private int _connectionGeneration;
+
         // Packages from an opened project, waiting for the plugin package support check to complete
         private List<WatchFile> _pendingProjectPackages;
 
@@ -74,6 +78,7 @@
             base.UpdateConnection(newService, detail, actionName, parameter);
 
             // Reset per-connection state
+            _connectionGeneration++;
             _pluginPackageSupportChecked = false;
             _pluginPackageSupported = false;
 
@@ -188,7 +193,8 @@
             {
                 return;
             }
-            if (listWatching.Items.Count > 0)
+            // Packages still waiting for the support check count as watched too, so they can be replaced
+            if (listWatching.Items.Count > 0 || _pendingProjectPackages?.Count > 0)
             {
                 if (MessageBox.Show("Keep existing watchers?\n\nYes to keep, No to remove.",
                     "AutoDeployer", MessageBoxButtons.YesNo, MessageBoxIcon.Information) == DialogResult.No)
@@ -918,6 +924,10 @@
             _pluginPackageSupportChecked = true;
             _pluginPackageCheckPending = true;
 
+            // The check runs against this connection; if it changes before the answer comes, the answer is ignored
+            var generation = _connectionGeneration;
+            var service = Service;
+
             WorkAsync(new WorkAsyncInfo
             {
                 Message = "Updating connection...",
@@ -932,7 +942,7 @@
                             TopCount = 1
                         };
 
-                        Service.RetrieveMultiple(qe);
+                        service.RetrieveMultiple(qe);
                         a.Result = true;
                     }
                     catch
@@ -942,6 +952,11 @@
                 },
                 PostWorkCallBack = a =>
                 {
+                    if (generation != _connectionGeneration)
+                    {
+                        return;
+                    }
+
                     _pluginPackageSupported = a.Error == null && a.Result is bool b && b;
                     _pluginPackageCheckPending = false;
 
