@@ -1,0 +1,115 @@
+name: CI Build
+
+# Every run gets a version 1.<yyyy>.<MM>.<rrr>, where rrr counts this workflow's runs in the month
+# (same scheme as the old ADO "ADT-CI" builds). The package of a successful master run is what
+# release.yml publishes, so the released binaries are exactly the ones built here.
+
+# Pushes build only on master: a change on its way there is built by its pull request,
+# against the merge result. Building the branch push as well ran the same build twice and
+# used up a version number each time. Build any branch by hand with workflow_dispatch.
+on:
+  push:
+    branches:
+      - master
+  pull_request:
+    branches:
+      - master
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  build:
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Calculate version
+        id: version
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          # This run's position among the month's runs: all runs created in earlier seconds, plus
+          # those created in the same second with an ID up to this one's (created_at only has
+          # one-second resolution). Overlapping runs therefore never share a number.
+          $runs = "repos/$env:GITHUB_REPOSITORY/actions/workflows/build.yml/runs"
+          $created = [DateTime]::Parse((gh api "repos/$env:GITHUB_REPOSITORY/actions/runs/$env:GITHUB_RUN_ID" --jq .created_at)).ToUniversalTime()
+          $from = [DateTime]::new($created.Year, $created.Month, 1, 0, 0, 0, [DateTimeKind]::Utc)
+          $fmt = 'yyyy-MM-ddTHH:mm:ssZ'
+          $earlier = 0
+          if ($created -gt $from) {
+            $earlier = [int](gh api "$runs`?created=$($from.ToString($fmt))..$($created.AddSeconds(-1).ToString($fmt))&per_page=1" --jq .total_count)
+            # A failed call yields '' which [int] turns into 0, so check each call
+            if ($LASTEXITCODE -ne 0) { throw "Unable to count the runs of this month" }
+          }
+          $second = $created.ToString($fmt)
+          $same = [int](gh api "$runs`?created=$second..$second&per_page=100" --jq "[.workflow_runs[] | select(.id <= $env:GITHUB_RUN_ID)] | length")
+          if ($LASTEXITCODE -ne 0 -or $same -lt 1) { throw "Unable to count the runs of this month" }
+          $rev = $earlier + $same
+
+          # Assembly/file version and tag use 1.2026.02.001, NuGet normalizes it to 1.2026.2.1
+          $display = '1.{0}.{1:00}.{2:000}' -f $created.Year, $created.Month, $rev
+          $nuget = '1.{0}.{1}.{2}' -f $created.Year, $created.Month, $rev
+          "VERSION=$nuget" >> $env:GITHUB_OUTPUT
+          "DISPLAY_VERSION=$display" >> $env:GITHUB_OUTPUT
+          Write-Host "Computed version: $display (NuGet $nuget)"
+
+      - name: Patch AssemblyInfo.cs
+        shell: pwsh
+        run: |
+          $version = "${{ steps.version.outputs.DISPLAY_VERSION }}"
+          $file = "XrmToolBox.AutoDeployer\Properties\AssemblyInfo.cs"
+          $content = (Get-Content $file -Raw) -replace 'Assembly(File)?Version\("[^"]*"\)', "Assembly`$1Version(`"$version`")"
+          Set-Content $file $content -NoNewline -Encoding utf8BOM
+          Write-Host "Patched $file to version $version"
+
+      - name: Patch nuspec version
+        shell: pwsh
+        run: |
+          $version = "${{ steps.version.outputs.VERSION }}"
+          $path = Resolve-Path "AutoDeployer.nuspec"
+          [xml]$xml = Get-Content $path
+          $xml.package.metadata.version = $version
+          $xml.Save($path)
+          Write-Host "Patched nuspec to version $version"
+
+      - name: Setup NuGet
+        uses: NuGet/setup-nuget@v2
+
+      - name: Setup MSBuild
+        uses: microsoft/setup-msbuild@v2
+
+      - name: Build solution (Release)
+        run: msbuild XrmToolBox.AutoDeployer.sln -restore /p:Configuration=Release /p:Platform="Any CPU" /m /v:minimal /nologo
+
+      - name: NuGet pack
+        shell: pwsh
+        run: |
+          nuget pack AutoDeployer.nuspec -OutputDirectory nupkg -NonInteractive
+          if ($LASTEXITCODE -ne 0) { throw "nuget pack failed with exit code $LASTEXITCODE" }
+
+          # The Plugins folder as XrmToolBox expects it, for testing a build without NuGet
+          $pkg = Get-ChildItem nupkg\*.nupkg | Select-Object -First 1
+          Expand-Archive $pkg.FullName -DestinationPath expanded
+          New-Item -ItemType Directory -Force plugin | Out-Null
+          Move-Item expanded\lib\net48\Plugins plugin\Plugins
+          Compress-Archive plugin\Plugins -DestinationPath "nupkg\ImranAkram.XTB.AutoDeployer-${{ steps.version.outputs.DISPLAY_VERSION }}.zip"
+
+      - name: Upload nupkg artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: nupkg-${{ steps.version.outputs.VERSION }}
+          path: nupkg/*
+
+      - name: Upload plugin files
+        uses: actions/upload-artifact@v4
+        with:
+          name: plugin-${{ steps.version.outputs.VERSION }}
+          path: plugin/
