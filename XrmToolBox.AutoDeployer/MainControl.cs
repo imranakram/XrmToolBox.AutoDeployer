@@ -21,6 +21,11 @@
         private readonly List<WatchPluginPackageFile> _packageWatchers = new List<WatchPluginPackageFile>();
         private readonly List<WatchWebResourceFile> _webResourceWatchers = new List<WatchWebResourceFile>();
 
+        // Packages from an opened project, waiting for the plugin package support check to complete
+        private List<WatchFile> _pendingProjectPackages;
+
+        private bool _pluginPackageCheckPending;
+
         private bool _pluginPackageSupportChecked;
 
         private bool _pluginPackageSupported;
@@ -74,14 +79,19 @@
             _pluginPackageSupportChecked = false;
             _pluginPackageSupported = false;
 
+            _pluginPackageCheckPending = false;
+            _pendingProjectPackages = null;
+
             if (detail == null || newService == null)
             {
+                ClearPluginAssemblyWatchers();
                 ClearWebResourceWatchers();
                 ClearPluginPackageWatchers();
                 bAddPackageMenuItem.Visible = false;
                 return;
             }
 
+            RefreshPluginAssemblyWatchers();
             UpdatePluginPackageUi();     // decides visibility; clears pkg watchers if not supported
             RefreshWebResourceWatchers();
 
@@ -98,15 +108,35 @@
 
         private void AddPluginAssembly(string path)
         {
-            var plugin = new WatchPluginFile(path, Service, this);
-            plugin.Changed += Plugin_Changed;
-            listWatching.Items.Add(plugin.ListItem);
+            var alreadyWatched = listWatching.Items.Cast<ListViewItem>()
+                .Any(i => i.Tag is WatchPluginFile w && string.Equals(w.FullPath, path, StringComparison.OrdinalIgnoreCase));
+            if (alreadyWatched)
+            {
+                return;
+            }
+
+            AddPluginAssemblyWatcher(path);
+
+            var cfg = LoadAssemblyConfig();
+            if (!cfg.Paths.Contains(path, StringComparer.OrdinalIgnoreCase))
+            {
+                cfg.Paths.Add(path);
+                SaveAssemblyConfig(cfg);
+            }
+
             if (listWatching.SelectedItems.Count == 0)
             {
                 listWatching.Items[0].Selected = true;
             }
             bDelSelected.Enabled = true;
             ApplyZebraToListWatchingPreserveSelection();
+        }
+
+        private void AddPluginAssemblyWatcher(string path)
+        {
+            var plugin = new WatchPluginFile(path, Service, this);
+            plugin.Changed += Plugin_Changed;
+            listWatching.Items.Add(plugin.ListItem);
         }
 
         private void AddPluginPackage(Guid packageId, string packageName, string path)
@@ -160,18 +190,14 @@
             var packages = project.WatchFiles.Where(x => x.Type == WatchFileType.PluginPackage).ToList();
             if (packages.Count > 0)
             {
-                if (_pluginPackageSupported)
+                if (_pluginPackageCheckPending)
                 {
-                    foreach (var watch in packages)
-                    {
-                        AddPluginPackage(watch.PackageId, watch.PackageName, watch.Path);
-                    }
-                    RefreshPluginPackageWatchers();
+                    // Support check still running after connecting; added when it completes
+                    _pendingProjectPackages = packages;
                 }
                 else
                 {
-                    MessageBox.Show($"The project contains {packages.Count} plugin package(s), but Plugin Packages are only supported in Dataverse online environments. They were skipped.",
-                        "AutoDeployer", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                    AddProjectPackages(packages);
                 }
             }
 
@@ -192,6 +218,22 @@
             bDelSelected.Enabled = listWatching.SelectedItems.Count > 0;
             UpdateWrSummary();
             ApplyZebraToListWatchingPreserveSelection();
+        }
+
+        private void AddProjectPackages(List<WatchFile> packages)
+        {
+            if (!_pluginPackageSupported)
+            {
+                MessageBox.Show($"The project contains {packages.Count} plugin package(s), but Plugin Packages are only supported in Dataverse online environments. They were skipped.",
+                    "AutoDeployer", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                return;
+            }
+
+            foreach (var watch in packages)
+            {
+                AddPluginPackage(watch.PackageId, watch.PackageName, watch.Path);
+            }
+            RefreshPluginPackageWatchers();
         }
 
         private void ApplyZebraToListWatching()
@@ -259,6 +301,12 @@
         // Plugin Package are only for Online CRM. Used to hide/show related UI.
         private void bAddPluginMenuItem_Click(object sender, EventArgs e)
         {
+            if (ConnectionDetail == null || Service == null)
+            {
+                MessageBox.Show("Connect to an environment first.", "AutoDeployer",
+                    MessageBoxButtons.OK, MessageBoxIcon.Information);
+                return;
+            }
             if (ofdPlugin.ShowDialog() == DialogResult.OK)
             {
                 AddPluginAssembly(ofdPlugin.FileName);
@@ -288,6 +336,7 @@
 
         private void bDelSelected_Click(object sender, EventArgs e)
         {
+            var removedAssemblyPaths = new List<string>();
             var removedWrRelPaths = new List<string>();
             var removedPkgIds = new List<Guid>();
 
@@ -295,6 +344,11 @@
             {
                 int idx = listWatching.SelectedIndices[i];
                 var item = listWatching.Items[idx];
+
+                if (item.Tag is WatchPluginFile plugin)
+                {
+                    removedAssemblyPaths.Add(plugin.FullPath);
+                }
 
                 if (item.Tag is WatchWebResourceFile wr)
                 {
@@ -323,6 +377,13 @@
             }
 
             // Persist removal (so they don't come back on reconnect)
+            if (removedAssemblyPaths.Count > 0)
+            {
+                var acfg = LoadAssemblyConfig();
+                acfg.Paths.RemoveAll(p => removedAssemblyPaths.Contains(p, StringComparer.OrdinalIgnoreCase));
+                SaveAssemblyConfig(acfg);
+            }
+
             if (removedWrRelPaths.Count > 0)
             {
                 var cfg = LoadWebResourceConfig();
@@ -385,6 +446,20 @@
                     SaveProjectXml(project, sfq.FileName);
                 }
             }
+        }
+
+        private void ClearPluginAssemblyWatchers()
+        {
+            for (int i = listWatching.Items.Count - 1; i >= 0; i--)
+            {
+                var item = listWatching.Items[i];
+                if (item.Tag is WatchPluginFile plugin)
+                {
+                    plugin.Dispose();
+                    listWatching.Items.RemoveAt(i);
+                }
+            }
+            ApplyZebraToListWatchingPreserveSelection();
         }
 
         private void ClearPluginPackageWatchers()
@@ -466,6 +541,17 @@
             Plugin_Changed(sender, e);
             bDelSelected.Enabled = listWatching.SelectedItems.Count > 0;
             UpdateWrSummary();
+        }
+
+        private PluginAssemblyWatchConfig LoadAssemblyConfig()
+        {
+            var name = GetPackageSettingsName();
+            if (SettingsManager.Instance.TryLoad(GetType(), out PluginAssemblyWatchConfig cfg, name + ".assemblies"))
+            {
+                return cfg;
+            }
+
+            return new PluginAssemblyWatchConfig();
         }
 
         private PluginPackageWatchConfig LoadPackageConfig()
@@ -579,7 +665,11 @@
             _packageWatchers.Clear();
             _webResourceWatchers.Clear();
 
-            // Forget persisted package and web resource watches too, otherwise they come back on reconnect
+            // Forget persisted watches too, otherwise they come back on reconnect
+            var acfg = LoadAssemblyConfig();
+            acfg.Paths.Clear();
+            SaveAssemblyConfig(acfg);
+
             var pcfg = LoadPackageConfig();
             pcfg.Items.Clear();
             SavePackageConfig(pcfg);
@@ -590,6 +680,27 @@
 
             txtLog.Text = string.Empty;
             UpdateWrSummary();
+        }
+
+        private void RefreshPluginAssemblyWatchers()
+        {
+            ClearPluginAssemblyWatchers();
+
+            if (Service == null)
+            {
+                return;
+            }
+
+            foreach (var path in LoadAssemblyConfig().Paths)
+            {
+                if (!string.IsNullOrWhiteSpace(path))
+                {
+                    AddPluginAssemblyWatcher(path);
+                }
+            }
+
+            bDelSelected.Enabled = listWatching.SelectedItems.Count > 0;
+            ApplyZebraToListWatchingPreserveSelection();
         }
 
         private void RefreshPluginPackageWatchers()
@@ -677,6 +788,12 @@
             bDelSelected.Enabled = listWatching.Items.Count > 0;
             UpdateWrSummary();
             ApplyZebraToListWatchingPreserveSelection();
+        }
+
+        private void SaveAssemblyConfig(PluginAssemblyWatchConfig cfg)
+        {
+            var name = GetPackageSettingsName();
+            SettingsManager.Instance.Save(GetType(), cfg, name + ".assemblies");
         }
 
         private void SavePackageConfig(PluginPackageWatchConfig cfg)
@@ -776,6 +893,7 @@
             }
 
             _pluginPackageSupportChecked = true;
+            _pluginPackageCheckPending = true;
 
             WorkAsync(new WorkAsyncInfo
             {
@@ -802,6 +920,7 @@
                 PostWorkCallBack = a =>
                 {
                     _pluginPackageSupported = a.Error == null && a.Result is bool b && b;
+                    _pluginPackageCheckPending = false;
 
                     bAddPackageMenuItem.Visible = _pluginPackageSupported;
 
@@ -812,6 +931,13 @@
                     else
                     {
                         ClearPluginPackageWatchers();
+                    }
+
+                    if (_pendingProjectPackages != null)
+                    {
+                        var packages = _pendingProjectPackages;
+                        _pendingProjectPackages = null;
+                        AddProjectPackages(packages);
                     }
                 }
             });

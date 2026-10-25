@@ -79,6 +79,7 @@
     <Compile Include="About.Designer.cs">
       <DependentUpon>About.cs</DependentUpon>
     </Compile>
+    <Compile Include="PluginAssemblyWatchConfig.cs" />
     <Compile Include="Project.cs" />
     <Compile Include="Constants.cs" />
     <Compile Include="DataverseFileUpload.cs" />
