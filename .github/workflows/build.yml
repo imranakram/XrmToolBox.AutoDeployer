@@ -26,7 +26,7 @@ jobs:
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           submodules: recursive
 
@@ -81,10 +81,10 @@ jobs:
           Write-Host "Patched nuspec to version $version"
 
       - name: Setup NuGet
-        uses: NuGet/setup-nuget@v2
+        uses: NuGet/setup-nuget@v4
 
       - name: Setup MSBuild
-        uses: microsoft/setup-msbuild@v2
+        uses: microsoft/setup-msbuild@v3
 
       - name: Build solution (Release)
         run: msbuild XrmToolBox.AutoDeployer.sln -restore /p:Configuration=Release /p:Platform="Any CPU" /m /v:minimal /nologo
@@ -115,7 +115,7 @@ jobs:
 
       - name: Upload test results
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: test-results-${{ steps.version.outputs.VERSION }}
           path: TestResults/*.trx
@@ -135,13 +135,13 @@ jobs:
           Compress-Archive plugin\Plugins -DestinationPath "nupkg\ImranAkram.XTB.AutoDeployer-${{ steps.version.outputs.DISPLAY_VERSION }}.zip"
 
       - name: Upload nupkg artifacts
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: nupkg-${{ steps.version.outputs.VERSION }}
           path: nupkg/*
 
       - name: Upload plugin files
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: plugin-${{ steps.version.outputs.VERSION }}
           path: plugin/
