@@ -102,7 +102,10 @@ $local = Join-Path $root 'Projects\Local'
 New-Item -ItemType Directory -Force $local | Out-Null
 foreach ($template in Get-ChildItem (Join-Path $root 'Projects') -Filter '*.adproj') {
     $text = [IO.File]::ReadAllText($template.FullName)
-    $text = $text.Replace('$(TestBench)', $root).Replace('$(PackageId)', $pkg.pluginpackageid).Replace('$(Prefix)', $Prefix)
+    # XML-escaped, so a folder like C:\R&D still gives a valid file
+    $text = $text.Replace('$(TestBench)', [Security.SecurityElement]::Escape($root)).
+        Replace('$(PackageId)', $pkg.pluginpackageid).
+        Replace('$(Prefix)', [Security.SecurityElement]::Escape($Prefix))
     [IO.File]::WriteAllText((Join-Path $local $template.Name), $text)
 }
 Write-Host "Wrote sample projects to $local"

@@ -2,6 +2,7 @@ using System;
 using System.IO;
 using System.Runtime.Serialization;
 using System.Runtime.Serialization.Json;
+using System.Security;
 using NUnit.Framework;
 
 namespace XrmToolBox.AutoDeployer.Tests
@@ -28,12 +29,10 @@ namespace XrmToolBox.AutoDeployer.Tests
 
         // Loads a sample project template from Projects\, with its placeholders filled in
         // the way Setup-Dataverse.ps1 does it
-        public static Project LoadSampleProject(string fileName)
+        public static Project LoadSampleProject(string fileName, string folder = null)
         {
-            var text = File.ReadAllText(PathTo(Path.Combine("Projects", fileName)))
-                .Replace("$(TestBench)", Folder)
-                .Replace("$(PackageId)", SamplePackageId.ToString())
-                .Replace("$(Prefix)", SamplePrefix);
+            var template = File.ReadAllText(PathTo(Path.Combine("Projects", fileName)));
+            var text = FillTemplate(template, folder ?? Folder, SamplePrefix, SamplePackageId);
             var temp = Path.Combine(Path.GetTempPath(), $"sample-{Guid.NewGuid():N}.adproj");
             try
             {
@@ -45,6 +44,13 @@ namespace XrmToolBox.AutoDeployer.Tests
                 File.Delete(temp);
             }
         }
+
+        // Same substitution as Setup-Dataverse.ps1, XML-escaped so any folder name gives a valid file
+        public static string FillTemplate(string template, string folder, string prefix, Guid packageId)
+            => template
+                .Replace("$(TestBench)", SecurityElement.Escape(folder))
+                .Replace("$(PackageId)", packageId.ToString())
+                .Replace("$(Prefix)", SecurityElement.Escape(prefix));
 
         public static string PathTo(string relativePath) => Path.Combine(Folder, relativePath);
 

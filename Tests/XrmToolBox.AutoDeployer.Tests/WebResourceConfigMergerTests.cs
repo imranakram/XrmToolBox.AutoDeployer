@@ -20,6 +20,33 @@ namespace XrmToolBox.AutoDeployer.Tests
             Assert.That(existing.Mappings.Select(m => m.RelativePath), Is.EqualTo(new[] { "a.js" }));
         }
 
+        [Test]
+        public void DifferentPrefixLeavesExistingUntouched()
+        {
+            // The manager rebuilds all CRM names from one prefix, so merging would retarget the imported watches
+            var existing = Config(@"C:\src\wr", "a.js");
+            var incoming = Config(@"C:\src\wr", "b.js");
+            incoming.Prefix = "other_/y";
+
+            var result = WebResourceConfigMerger.Merge(existing, incoming);
+
+            Assert.That(result, Is.EqualTo(WebResourceMergeResult.PrefixDiffers));
+            Assert.That(existing.Mappings.Select(m => m.RelativePath), Is.EqualTo(new[] { "a.js" }));
+            Assert.That(existing.Prefix, Is.EqualTo("adt_/x"));
+        }
+
+        [TestCase("adt_/x/")]
+        [TestCase(" ADT_/X ")]
+        [TestCase(@"adt_/x\")]
+        public void SamePrefixWrittenDifferentlyStillMerges(string incomingPrefix)
+        {
+            var existing = Config(@"C:\src\wr", "a.js");
+            var incoming = Config(@"C:\src\wr", "b.js");
+            incoming.Prefix = incomingPrefix;
+
+            Assert.That(WebResourceConfigMerger.Merge(existing, incoming), Is.EqualTo(WebResourceMergeResult.Merged));
+        }
+
         [TestCase(null)]
         [TestCase("")]
         [TestCase(@"C:\src\wr")]

@@ -90,6 +90,17 @@ namespace XrmToolBox.AutoDeployer.Tests
             Assert.That(project.WebResources.RootPath, Is.EqualTo(TestBench.PathTo("WebResources")));
         }
 
+        [Test]
+        public void SamplesWorkInAFolderWithXmlCharacters()
+        {
+            const string folder = @"C:\R&D <tools>\TestBench";
+
+            var project = TestBench.LoadSampleProject("AutoDeployTest.adproj", folder);
+
+            Assert.That(project.WebResources.RootPath, Is.EqualTo(folder + @"\WebResources"));
+            Assert.That(project.WatchFiles[0].Path, Does.StartWith(folder + @"\PluginAssembly"));
+        }
+
         // The templates must work for any clone, environment and publisher
         [TestCase("AutoDeployTest.adproj")]
         [TestCase("AutoDeployTest-Legacy.adproj")]

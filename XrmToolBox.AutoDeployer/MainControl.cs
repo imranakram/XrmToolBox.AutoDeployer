@@ -113,7 +113,13 @@
                 return;
             }
 
-            AddPluginAssemblyWatcher(path);
+            var error = AddPluginAssemblyWatcher(path);
+            if (error != null)
+            {
+                MessageBox.Show($"Unable to watch {path}:\n{error}", "AutoDeployer",
+                    MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                return;
+            }
 
             var cfg = LoadAssemblyConfig();
             if (!cfg.Paths.Contains(path, StringComparer.OrdinalIgnoreCase))
@@ -130,11 +136,20 @@
             ApplyZebraToListWatchingPreserveSelection();
         }
 
-        private void AddPluginAssemblyWatcher(string path)
+        // Returns the error when the assembly can't be watched (e.g. the DLL was deleted or moved), otherwise null
+        private string AddPluginAssemblyWatcher(string path)
         {
-            var plugin = new WatchPluginFile(path, Service, this);
-            plugin.Changed += Plugin_Changed;
-            listWatching.Items.Add(plugin.ListItem);
+            try
+            {
+                var plugin = new WatchPluginFile(path, Service, this);
+                plugin.Changed += Plugin_Changed;
+                listWatching.Items.Add(plugin.ListItem);
+                return null;
+            }
+            catch (Exception ex)
+            {
+                return ex.Message;
+            }
         }
 
         private void AddPluginPackage(Guid packageId, string packageName, string path)
@@ -190,8 +205,9 @@
             {
                 if (_pluginPackageCheckPending)
                 {
-                    // Support check still running after connecting; added when it completes
-                    _pendingProjectPackages = packages;
+                    // Support check still running after connecting; added when it completes.
+                    // Appended, so a second project opened with "keep" doesn't drop the first one's packages.
+                    _pendingProjectPackages = (_pendingProjectPackages ?? new List<WatchFile>()).Concat(packages).ToList();
                 }
                 else
                 {
@@ -589,18 +605,23 @@
         }
 
         // Adds the project's web resource mappings to this connection's settings.
-        // Returns false if the user declined replacing settings that use a different root folder.
+        // Returns false if the user declined replacing settings that use a different root folder or prefix.
         private bool MergeWebResourceConfig(WebResourceWatchConfig projectCfg)
         {
             var cfg = LoadWebResourceConfig();
-            switch (WebResourceConfigMerger.Merge(cfg, projectCfg))
+            var result = WebResourceConfigMerger.Merge(cfg, projectCfg);
+            switch (result)
             {
                 case WebResourceMergeResult.Merged:
                     SaveWebResourceConfig(cfg);
                     return true;
 
                 case WebResourceMergeResult.RootDiffers:
-                    if (MessageBox.Show($"The project's web resources use the root folder\n{projectCfg.RootPath}\n\nbut this connection uses\n{cfg.RootPath}\n\nReplace this connection's web resource settings with the project's?",
+                case WebResourceMergeResult.PrefixDiffers:
+                    var what = result == WebResourceMergeResult.RootDiffers ? "root folder" : "prefix";
+                    var projectValue = result == WebResourceMergeResult.RootDiffers ? projectCfg.RootPath : projectCfg.Prefix;
+                    var currentValue = result == WebResourceMergeResult.RootDiffers ? cfg.RootPath : cfg.Prefix;
+                    if (MessageBox.Show($"The project's web resources use the {what}\n{projectValue}\n\nbut this connection uses\n{currentValue}\n\nReplace this connection's web resource settings with the project's?",
                         "AutoDeployer", MessageBoxButtons.YesNo, MessageBoxIcon.Question) != DialogResult.Yes)
                     {
                         return false;
@@ -651,6 +672,9 @@
             _packageWatchers.Clear();
             _webResourceWatchers.Clear();
 
+            // Packages from a project opened while the support check is running are removed too
+            _pendingProjectPackages = null;
+
             // Forget persisted watches too, otherwise they come back on reconnect
             var acfg = LoadAssemblyConfig();
             acfg.Paths.Clear();
@@ -677,16 +701,29 @@
                 return;
             }
 
+            // One missing DLL must not stop the other watchers from switching to the new connection,
+            // so report failures afterwards. The paths stay saved and come back once the DLL is there again.
+            var failures = new List<string>();
             foreach (var path in LoadAssemblyConfig().Paths)
             {
                 if (!string.IsNullOrWhiteSpace(path))
                 {
-                    AddPluginAssemblyWatcher(path);
+                    var error = AddPluginAssemblyWatcher(path);
+                    if (error != null)
+                    {
+                        failures.Add($"{path}\n    {error}");
+                    }
                 }
             }
 
             bDelSelected.Enabled = listWatching.SelectedItems.Count > 0;
             ApplyZebraToListWatchingPreserveSelection();
+
+            if (failures.Count > 0)
+            {
+                MessageBox.Show("These plugin assemblies can't be watched right now and were skipped:\n\n" + string.Join("\n", failures),
+                    "AutoDeployer", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+            }
         }
 
         private void RefreshPluginPackageWatchers()

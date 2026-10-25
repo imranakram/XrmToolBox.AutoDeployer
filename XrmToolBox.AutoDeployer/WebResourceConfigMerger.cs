@@ -13,7 +13,11 @@ namespace XrmToolBox.AutoDeployer
         Merged,
 
         // Different root folder: nothing changed, the user has to choose
-        RootDiffers
+        RootDiffers,
+
+        // Same root folder but a different prefix: nothing changed, the user has to choose.
+        // The manager rebuilds every CRM name from the one prefix, so the two can't be combined.
+        PrefixDiffers
     }
 
     // Combines web resource settings from a project file with the ones of the connection
@@ -31,6 +35,11 @@ namespace XrmToolBox.AutoDeployer
             if (!SameFolder(existing.RootPath, incoming.RootPath))
             {
                 return WebResourceMergeResult.RootDiffers;
+            }
+
+            if (!SamePrefix(existing.Prefix, incoming.Prefix))
+            {
+                return WebResourceMergeResult.PrefixDiffers;
             }
 
             foreach (var mapping in incoming.Mappings ?? new List<WebResourceMapping>())
@@ -52,6 +61,10 @@ namespace XrmToolBox.AutoDeployer
 
         private static string NormalizeFolder(string path)
             => (path ?? "").Replace('/', '\\').TrimEnd('\\');
+
+        // Trimmed the same way WebResourcesManagerDialog.BuildCrmName does
+        private static bool SamePrefix(string a, string b)
+            => string.Equals((a ?? "").Trim().TrimEnd('/', '\\'), (b ?? "").Trim().TrimEnd('/', '\\'), StringComparison.OrdinalIgnoreCase);
 
         #endregion Private Methods
     }
