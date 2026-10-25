@@ -35,6 +35,22 @@ namespace XrmToolBox.AutoDeployer.Tests
             Assert.That(existing.Prefix, Is.EqualTo("adt_/x"));
         }
 
+        [TestCase(false, true, ExpectedResult = true)]
+        [TestCase(true, false, ExpectedResult = true)]
+        [TestCase(false, false, ExpectedResult = false)]
+        public bool SameFileIsWatchedWhenEitherSideWatchesIt(bool existingActive, bool incomingActive)
+        {
+            var existing = Config(@"C:\src\wr", "a.js");
+            existing.Mappings[0].IsActive = existingActive;
+            var incoming = Config(@"C:\src\wr", "a.js");
+            incoming.Mappings[0].IsActive = incomingActive;
+
+            WebResourceConfigMerger.Merge(existing, incoming);
+
+            Assert.That(existing.Mappings, Has.Count.EqualTo(1));
+            return existing.Mappings[0].IsActive;
+        }
+
         [Test]
         public void MappingToATakenWebResourceIsSkipped()
         {

@@ -42,18 +42,25 @@ namespace XrmToolBox.AutoDeployer
                 return WebResourceMergeResult.PrefixDiffers;
             }
 
-            // A file that's already mapped, or a web resource that another file already deploys to, keeps the
-            // existing mapping: two files uploading to one web resource would overwrite each other
-            // (the manager's validation refuses duplicate CRM names for the same reason)
             foreach (var mapping in incoming.Mappings ?? new List<WebResourceMapping>())
             {
-                var taken = existing.Mappings.Any(m =>
-                    string.Equals(m.RelativePath, mapping.RelativePath, StringComparison.OrdinalIgnoreCase)
-                    || string.Equals(m.CrmName, mapping.CrmName, StringComparison.OrdinalIgnoreCase));
-                if (!taken)
+                // The same file: keep the existing mapping, but watch it when either side does. The manager keeps
+                // unchecked scan results, so an inactive existing entry would otherwise drop the project's watch.
+                var sameFile = existing.Mappings.FirstOrDefault(m => string.Equals(m.RelativePath, mapping.RelativePath, StringComparison.OrdinalIgnoreCase));
+                if (sameFile != null)
                 {
-                    existing.Mappings.Add(mapping);
+                    sameFile.IsActive |= mapping.IsActive;
+                    continue;
                 }
+
+                // A web resource that another file already deploys to keeps the existing mapping: two files
+                // uploading to one web resource would overwrite each other (the manager refuses duplicate CRM names too)
+                if (existing.Mappings.Any(m => string.Equals(m.CrmName, mapping.CrmName, StringComparison.OrdinalIgnoreCase)))
+                {
+                    continue;
+                }
+
+                existing.Mappings.Add(mapping);
             }
             return WebResourceMergeResult.Merged;
         }
