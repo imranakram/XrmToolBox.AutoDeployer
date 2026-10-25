@@ -35,6 +35,20 @@ namespace XrmToolBox.AutoDeployer.Tests
             Assert.That(existing.Prefix, Is.EqualTo("adt_/x"));
         }
 
+        [Test]
+        public void MappingToATakenWebResourceIsSkipped()
+        {
+            var existing = Config(@"C:\src\wr", "a.js");
+            var incoming = Config(@"C:\src\wr", "b.js", "c.js");
+            // b.js would deploy to the web resource a.js already deploys to
+            incoming.Mappings[0].CrmName = "ADT_/x/a.js";
+
+            var result = WebResourceConfigMerger.Merge(existing, incoming);
+
+            Assert.That(result, Is.EqualTo(WebResourceMergeResult.Merged));
+            Assert.That(existing.Mappings.Select(m => m.RelativePath), Is.EqualTo(new[] { "a.js", "c.js" }));
+        }
+
         [TestCase("adt_/x/")]
         [TestCase(" ADT_/X ")]
         [TestCase(@"adt_/x\")]

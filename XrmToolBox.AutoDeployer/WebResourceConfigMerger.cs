@@ -42,9 +42,15 @@ namespace XrmToolBox.AutoDeployer
                 return WebResourceMergeResult.PrefixDiffers;
             }
 
+            // A file that's already mapped, or a web resource that another file already deploys to, keeps the
+            // existing mapping: two files uploading to one web resource would overwrite each other
+            // (the manager's validation refuses duplicate CRM names for the same reason)
             foreach (var mapping in incoming.Mappings ?? new List<WebResourceMapping>())
             {
-                if (!existing.Mappings.Any(m => string.Equals(m.RelativePath, mapping.RelativePath, StringComparison.OrdinalIgnoreCase)))
+                var taken = existing.Mappings.Any(m =>
+                    string.Equals(m.RelativePath, mapping.RelativePath, StringComparison.OrdinalIgnoreCase)
+                    || string.Equals(m.CrmName, mapping.CrmName, StringComparison.OrdinalIgnoreCase));
+                if (!taken)
                 {
                     existing.Mappings.Add(mapping);
                 }

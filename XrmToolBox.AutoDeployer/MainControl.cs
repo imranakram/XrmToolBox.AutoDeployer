@@ -156,8 +156,13 @@
         {
             var cfg = LoadPackageConfig();
 
-            // Optional: prevent duplicates by PackageId (recommended)
-            var existing = cfg.Items.FirstOrDefault(x => x.PackageId == packageId);
+            // Prevent duplicates by PackageId, or by name + file: a watch whose id was resolved by name
+            // (see WatchPluginPackageFile) no longer has the id stored in the project it came from
+            var existing = cfg.Items.FirstOrDefault(x => x.PackageId == packageId)
+                ?? cfg.Items.FirstOrDefault(x =>
+                    !string.IsNullOrWhiteSpace(packageName)
+                    && string.Equals(x.PackageName, packageName, StringComparison.OrdinalIgnoreCase)
+                    && string.Equals(x.NupkgPath, path, StringComparison.OrdinalIgnoreCase));
             if (existing != null)
             {
                 existing.IsActive = true;
