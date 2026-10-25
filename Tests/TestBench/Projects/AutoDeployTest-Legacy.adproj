@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Template: Setup-Dataverse.ps1 writes a ready-to-open copy to Projects\Local.
+     The format saved by the first version of the feature (PR 19): web resources as plain paths.
+     The assembly should load; the web resources should give the "saved by an earlier version" message. -->
+<Project xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:xsd="http://www.w3.org/2001/XMLSchema">
+  <WatchFiles>
+    <WatchFile>
+      <PackageId>00000000-0000-0000-0000-000000000000</PackageId>
+      <Path>$(TestBench)\PluginAssembly\bin\Debug\net462\AutoDeployTest.Plugins.dll</Path>
+      <Type>PluginAssembly</Type>
+    </WatchFile>
+    <WatchFile>
+      <PackageId>00000000-0000-0000-0000-000000000000</PackageId>
+      <Path>$(TestBench)\WebResources\scripts\test.js</Path>
+      <Type>WebResource</Type>
+    </WatchFile>
+  </WatchFiles>
+</Project>

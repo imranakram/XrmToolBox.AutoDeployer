@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Template: Setup-Dataverse.ps1 writes a ready-to-open copy to Projects\Local.
+     Web resources under a different root folder than AutoDeployTest.adproj.
+     Open this while the web resources from AutoDeployTest.adproj are loaded and answer "Yes, keep":
+     you should be asked whether to replace the connection's web resource settings. -->
+<Project xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:xsd="http://www.w3.org/2001/XMLSchema">
+  <WatchFiles />
+  <WebResources>
+    <DebounceMs>1500</DebounceMs>
+    <Mappings>
+      <WebResourceMapping>
+        <CrmName>$(Prefix)_/autodeploytest/scripts/test.js</CrmName>
+        <IsActive>true</IsActive>
+        <RelativePath>test.js</RelativePath>
+      </WebResourceMapping>
+    </Mappings>
+    <Patterns>*.js</Patterns>
+    <Prefix>$(Prefix)_/autodeploytest/scripts</Prefix>
+    <PublishEnabled>true</PublishEnabled>
+    <RootPath>$(TestBench)\WebResources\scripts</RootPath>
+  </WebResources>
+</Project>

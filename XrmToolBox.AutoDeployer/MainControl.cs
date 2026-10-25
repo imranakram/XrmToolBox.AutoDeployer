@@ -2,10 +2,8 @@
 {
     using System;
     using System.Collections.Generic;
-    using System.IO;
     using System.Linq;
     using System.Windows.Forms;
-    using System.Xml.Serialization;
     using McTools.Xrm.Connection;
     using Microsoft.Xrm.Sdk;
     using Microsoft.Xrm.Sdk.Query;
@@ -20,6 +18,15 @@
         private static readonly System.Drawing.Color ZebraOdd = System.Drawing.Color.FromArgb(245, 245, 245);
         private readonly List<WatchPluginPackageFile> _packageWatchers = new List<WatchPluginPackageFile>();
         private readonly List<WatchWebResourceFile> _webResourceWatchers = new List<WatchWebResourceFile>();
+
+        // Bumped on every connection change, so a plugin package support check that finishes after
+        // switching connection knows its result is about the previous one
+        private int _connectionGeneration;
+
+        // Packages from an opened project, waiting for the plugin package support check to complete
+        private List<WatchFile> _pendingProjectPackages;
+
+        private bool _pluginPackageCheckPending;
 
         private bool _pluginPackageSupportChecked;
 
@@ -71,17 +78,23 @@
             base.UpdateConnection(newService, detail, actionName, parameter);
 
             // Reset per-connection state
+            _connectionGeneration++;
             _pluginPackageSupportChecked = false;
             _pluginPackageSupported = false;
 
+            _pluginPackageCheckPending = false;
+            _pendingProjectPackages = null;
+
             if (detail == null || newService == null)
             {
+                ClearPluginAssemblyWatchers();
                 ClearWebResourceWatchers();
                 ClearPluginPackageWatchers();
                 bAddPackageMenuItem.Visible = false;
                 return;
             }
 
+            RefreshPluginAssemblyWatchers();
             UpdatePluginPackageUi();     // decides visibility; clears pkg watchers if not supported
             RefreshWebResourceWatchers();
 
@@ -98,9 +111,28 @@
 
         private void AddPluginAssembly(string path)
         {
-            var plugin = new WatchPluginFile(ofdPlugin.FileName, Service, this);
-            plugin.Changed += Plugin_Changed;
-            listWatching.Items.Add(plugin.ListItem);
+            var alreadyWatched = listWatching.Items.Cast<ListViewItem>()
+                .Any(i => i.Tag is WatchPluginFile w && string.Equals(w.FullPath, path, StringComparison.OrdinalIgnoreCase));
+            if (alreadyWatched)
+            {
+                return;
+            }
+
+            var error = AddPluginAssemblyWatcher(path);
+            if (error != null)
+            {
+                MessageBox.Show($"Unable to watch {path}:\n{error}", "AutoDeployer",
+                    MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                return;
+            }
+
+            var cfg = LoadAssemblyConfig();
+            if (!cfg.Paths.Contains(path, StringComparer.OrdinalIgnoreCase))
+            {
+                cfg.Paths.Add(path);
+                SaveAssemblyConfig(cfg);
+            }
+
             if (listWatching.SelectedItems.Count == 0)
             {
                 listWatching.Items[0].Selected = true;
@@ -109,12 +141,33 @@
             ApplyZebraToListWatchingPreserveSelection();
         }
 
+        // Returns the error when the assembly can't be watched (e.g. the DLL was deleted or moved), otherwise null
+        private string AddPluginAssemblyWatcher(string path)
+        {
+            try
+            {
+                var plugin = new WatchPluginFile(path, Service, this);
+                plugin.Changed += Plugin_Changed;
+                listWatching.Items.Add(plugin.ListItem);
+                return null;
+            }
+            catch (Exception ex)
+            {
+                return ex.Message;
+            }
+        }
+
         private void AddPluginPackage(Guid packageId, string packageName, string path)
         {
             var cfg = LoadPackageConfig();
 
-            // Optional: prevent duplicates by PackageId (recommended)
-            var existing = cfg.Items.FirstOrDefault(x => x.PackageId == packageId);
+            // Prevent duplicates by PackageId, or by name + file: a watch whose id was resolved by name
+            // (see WatchPluginPackageFile) no longer has the id stored in the project it came from
+            var existing = cfg.Items.FirstOrDefault(x => x.PackageId == packageId)
+                ?? cfg.Items.FirstOrDefault(x =>
+                    !string.IsNullOrWhiteSpace(packageName)
+                    && string.Equals(x.PackageName, packageName, StringComparison.OrdinalIgnoreCase)
+                    && string.Equals(x.NupkgPath, path, StringComparison.OrdinalIgnoreCase));
             if (existing != null)
             {
                 existing.IsActive = true;
@@ -140,50 +193,72 @@
             {
                 return;
             }
-            if (listWatching.Items.Count > 0)
+            // Packages still waiting for the support check count as watched too, so they can be replaced
+            if (listWatching.Items.Count > 0 || _pendingProjectPackages?.Count > 0)
             {
                 if (MessageBox.Show("Keep existing watchers?\n\nYes to keep, No to remove.",
                     "AutoDeployer", MessageBoxButtons.YesNo, MessageBoxIcon.Information) == DialogResult.No)
                 {
-                    listWatching.Items.Clear();
-                    //ClearWebResourceWatchers();
-                    ClearPluginPackageWatchers();
+                    RemoveAllWatchers();
                 }
             }
-            foreach (var watch in project.WatchFiles)
+
+            foreach (var watch in project.WatchFiles.Where(x => x.Type == WatchFileType.PluginAssembly))
             {
-                switch (watch.Type)
+                if (!string.IsNullOrWhiteSpace(watch.Path))
                 {
-                    case Type.PluginAssembly:
-                        if (!string.IsNullOrWhiteSpace(watch.Path))
-                        {
-                            var plugin = new WatchPluginFile(watch.Path, Service, this);
-                            plugin.Changed += Plugin_Changed;
-                            listWatching.Items.Add(plugin.ListItem);
-                        }
-                        break;
-
-                    case Type.WebResource:
-                        // WebResource watches are managed via the WebResourcesManagerDialog
-                        break;
-
-                    case Type.PluginPackage:
-                        AddPluginPackage(watch.PackageId, watch.PackageName, watch.Path);
-                        break;
+                    AddPluginAssembly(watch.Path);
                 }
             }
-            if (project.WatchFiles.Any(x => x.Type == Type.WebResource))
+
+            var packages = project.WatchFiles.Where(x => x.Type == WatchFileType.PluginPackage).ToList();
+            if (packages.Count > 0)
             {
-                MessageBox.Show("We are sorry, but WebResource watches are not supported in the configuration file. Please use the Web Resources Manager dialog to manage WebResource watches.", "AutoDeployer",
-                    MessageBoxButtons.OK, MessageBoxIcon.Information);
-                //RefreshWebResourceWatchers();
+                if (_pluginPackageCheckPending)
+                {
+                    // Support check still running after connecting; added when it completes.
+                    // Appended, so a second project opened with "keep" doesn't drop the first one's packages.
+                    _pendingProjectPackages = (_pendingProjectPackages ?? new List<WatchFile>()).Concat(packages).ToList();
+                }
+                else
+                {
+                    AddProjectPackages(packages);
+                }
             }
-            if (project.WatchFiles.Any(x => x.Type == Type.PluginPackage))
+
+            if (!string.IsNullOrWhiteSpace(project.WebResources?.RootPath))
             {
-                RefreshPluginPackageWatchers();
+                if (MergeWebResourceConfig(project.WebResources))
+                {
+                    RefreshWebResourceWatchers();
+                }
             }
+            else if (project.WatchFiles.Any(x => x.Type == WatchFileType.WebResource))
+            {
+                // Older project files only stored the file path, which is not enough to recreate the watch
+                MessageBox.Show("The web resources in this project file can't be restored, since it was saved by an earlier version. Add them again in the Web Resources Manager and save the project.",
+                    "AutoDeployer", MessageBoxButtons.OK, MessageBoxIcon.Information);
+            }
+
             bDelSelected.Enabled = listWatching.SelectedItems.Count > 0;
+            UpdateWrSummary();
             ApplyZebraToListWatchingPreserveSelection();
+        }
+
+        private void AddProjectPackages(List<WatchFile> packages)
+        {
+            if (!_pluginPackageSupported)
+            {
+                MessageBox.Show($"The project contains {packages.Count} plugin package(s), but Plugin Packages are only supported in Dataverse online environments. They were skipped.",
+                    "AutoDeployer", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                return;
+            }
+
+            foreach (var watch in packages)
+            {
+                AddPluginPackage(watch.PackageId, watch.PackageName, watch.Path);
+            }
+            RefreshPluginPackageWatchers();
         }
 
         private void ApplyZebraToListWatching()
@@ -251,6 +326,12 @@
         // Plugin Package are only for Online CRM. Used to hide/show related UI.
         private void bAddPluginMenuItem_Click(object sender, EventArgs e)
         {
+            if (ConnectionDetail == null || Service == null)
+            {
+                MessageBox.Show("Connect to an environment first.", "AutoDeployer",
+                    MessageBoxButtons.OK, MessageBoxIcon.Information);
+                return;
+            }
             if (ofdPlugin.ShowDialog() == DialogResult.OK)
             {
                 AddPluginAssembly(ofdPlugin.FileName);
@@ -280,6 +361,7 @@
 
         private void bDelSelected_Click(object sender, EventArgs e)
         {
+            var removedAssemblyPaths = new List<string>();
             var removedWrRelPaths = new List<string>();
             var removedPkgIds = new List<Guid>();
 
@@ -287,6 +369,11 @@
             {
                 int idx = listWatching.SelectedIndices[i];
                 var item = listWatching.Items[idx];
+
+                if (item.Tag is WatchPluginFile plugin)
+                {
+                    removedAssemblyPaths.Add(plugin.FullPath);
+                }
 
                 if (item.Tag is WatchWebResourceFile wr)
                 {
@@ -315,6 +402,13 @@
             }
 
             // Persist removal (so they don't come back on reconnect)
+            if (removedAssemblyPaths.Count > 0)
+            {
+                var acfg = LoadAssemblyConfig();
+                acfg.Paths.RemoveAll(p => removedAssemblyPaths.Contains(p, StringComparer.OrdinalIgnoreCase));
+                SaveAssemblyConfig(acfg);
+            }
+
             if (removedWrRelPaths.Count > 0)
             {
                 var cfg = LoadWebResourceConfig();
@@ -342,6 +436,13 @@
 
         private void bOpen_Click(object sender, EventArgs e)
         {
+            if (ConnectionDetail == null || Service == null)
+            {
+                MessageBox.Show("Connect to an environment first.", "AutoDeployer",
+                    MessageBoxButtons.OK, MessageBoxIcon.Information);
+                return;
+            }
+
             using (var ofq = new OpenFileDialog
             {
                 Filter = "Auto Deployer Project (*.adproj)|*.adproj",
@@ -370,6 +471,20 @@
                     SaveProjectXml(project, sfq.FileName);
                 }
             }
+        }
+
+        private void ClearPluginAssemblyWatchers()
+        {
+            for (int i = listWatching.Items.Count - 1; i >= 0; i--)
+            {
+                var item = listWatching.Items[i];
+                if (item.Tag is WatchPluginFile plugin)
+                {
+                    plugin.Dispose();
+                    listWatching.Items.RemoveAt(i);
+                }
+            }
+            ApplyZebraToListWatchingPreserveSelection();
         }
 
         private void ClearPluginPackageWatchers()
@@ -413,15 +528,7 @@
                     project.WatchFiles.Add(new WatchFile
                     {
                         Path = plugin.FullPath,
-                        Type = Type.PluginAssembly
-                    });
-                }
-                else if (item.Tag is WatchWebResourceFile wr)
-                {
-                    project.WatchFiles.Add(new WatchFile
-                    {
-                        Path = wr.FullPath,
-                        Type = Type.WebResource
+                        Type = WatchFileType.PluginAssembly
                     });
                 }
                 else if (item.Tag is WatchPluginPackageFile pp)
@@ -429,11 +536,17 @@
                     project.WatchFiles.Add(new WatchFile
                     {
                         Path = pp.FullPath,
-                        Type = Type.PluginPackage,
+                        Type = WatchFileType.PluginPackage,
                         PackageId = pp.PluginPackageId,
                         PackageName = pp.PluginPackageName,
                     });
                 }
+            }
+
+            var wrCfg = LoadWebResourceConfig();
+            if (!string.IsNullOrWhiteSpace(wrCfg.RootPath) && wrCfg.Mappings?.Count > 0)
+            {
+                project.WebResources = wrCfg;
             }
 
             return project;
@@ -455,6 +568,17 @@
             UpdateWrSummary();
         }
 
+        private PluginAssemblyWatchConfig LoadAssemblyConfig()
+        {
+            var name = GetPackageSettingsName();
+            if (SettingsManager.Instance.TryLoad(GetType(), out PluginAssemblyWatchConfig cfg, name + ".assemblies"))
+            {
+                return cfg;
+            }
+
+            return new PluginAssemblyWatchConfig();
+        }
+
         private PluginPackageWatchConfig LoadPackageConfig()
         {
             var name = GetPackageSettingsName();
@@ -468,19 +592,14 @@
 
         private Project LoadProjectXml(string fileName)
         {
-            var serializer = new XmlSerializer(typeof(Project));
-
-            using (var reader = new StreamReader(fileName))
+            try
             {
-                try
-                {
-                    return (Project)serializer.Deserialize(reader);
-                }
-                catch (Exception ex)
-                {
-                    ShowErrorDialog(ex, "Load Project");
-                    return null;
-                }
+                return ProjectFile.Load(fileName);
+            }
+            catch (Exception ex)
+            {
+                ShowErrorDialog(ex, "Load Project");
+                return null;
             }
         }
 
@@ -494,6 +613,37 @@
             }
 
             return new WebResourceWatchConfig { PublishEnabled = true, DebounceMs = 1500 };
+        }
+
+        // Adds the project's web resource mappings to this connection's settings.
+        // Returns false if the user declined replacing settings that use a different root folder or prefix.
+        private bool MergeWebResourceConfig(WebResourceWatchConfig projectCfg)
+        {
+            var cfg = LoadWebResourceConfig();
+            var result = WebResourceConfigMerger.Merge(cfg, projectCfg);
+            switch (result)
+            {
+                case WebResourceMergeResult.Merged:
+                    SaveWebResourceConfig(cfg);
+                    return true;
+
+                case WebResourceMergeResult.RootDiffers:
+                case WebResourceMergeResult.PrefixDiffers:
+                    var what = result == WebResourceMergeResult.RootDiffers ? "root folder" : "prefix";
+                    var projectValue = result == WebResourceMergeResult.RootDiffers ? projectCfg.RootPath : projectCfg.Prefix;
+                    var currentValue = result == WebResourceMergeResult.RootDiffers ? cfg.RootPath : cfg.Prefix;
+                    if (MessageBox.Show($"The project's web resources use the {what}\n{projectValue}\n\nbut this connection uses\n{currentValue}\n\nReplace this connection's web resource settings with the project's?",
+                        "AutoDeployer", MessageBoxButtons.YesNo, MessageBoxIcon.Question) != DialogResult.Yes)
+                    {
+                        return false;
+                    }
+                    SaveWebResourceConfig(projectCfg);
+                    return true;
+
+                default:
+                    SaveWebResourceConfig(projectCfg);
+                    return true;
+            }
         }
 
         private void Plugin_Changed(object sender, EventArgs e)
@@ -518,6 +668,73 @@
             }
 
             txtLog.Text = string.Empty;
+        }
+
+        private void RemoveAllWatchers()
+        {
+            foreach (ListViewItem item in listWatching.Items)
+            {
+                if (item.Tag is IDisposable disposable)
+                {
+                    disposable.Dispose();
+                }
+            }
+            listWatching.Items.Clear();
+            _packageWatchers.Clear();
+            _webResourceWatchers.Clear();
+
+            // Packages from a project opened while the support check is running are removed too
+            _pendingProjectPackages = null;
+
+            // Forget persisted watches too, otherwise they come back on reconnect
+            var acfg = LoadAssemblyConfig();
+            acfg.Paths.Clear();
+            SaveAssemblyConfig(acfg);
+
+            var pcfg = LoadPackageConfig();
+            pcfg.Items.Clear();
+            SavePackageConfig(pcfg);
+
+            var wcfg = LoadWebResourceConfig();
+            wcfg.Mappings?.Clear();
+            SaveWebResourceConfig(wcfg);
+
+            txtLog.Text = string.Empty;
+            UpdateWrSummary();
+        }
+
+        private void RefreshPluginAssemblyWatchers()
+        {
+            ClearPluginAssemblyWatchers();
+
+            if (Service == null)
+            {
+                return;
+            }
+
+            // One missing DLL must not stop the other watchers from switching to the new connection,
+            // so report failures afterwards. The paths stay saved and come back once the DLL is there again.
+            var failures = new List<string>();
+            foreach (var path in LoadAssemblyConfig().Paths)
+            {
+                if (!string.IsNullOrWhiteSpace(path))
+                {
+                    var error = AddPluginAssemblyWatcher(path);
+                    if (error != null)
+                    {
+                        failures.Add($"{path}\n    {error}");
+                    }
+                }
+            }
+
+            bDelSelected.Enabled = listWatching.SelectedItems.Count > 0;
+            ApplyZebraToListWatchingPreserveSelection();
+
+            if (failures.Count > 0)
+            {
+                MessageBox.Show("These plugin assemblies can't be watched right now and were skipped:\n\n" + string.Join("\n", failures),
+                    "AutoDeployer", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+            }
         }
 
         private void RefreshPluginPackageWatchers()
@@ -607,6 +824,12 @@
             ApplyZebraToListWatchingPreserveSelection();
         }
 
+        private void SaveAssemblyConfig(PluginAssemblyWatchConfig cfg)
+        {
+            var name = GetPackageSettingsName();
+            SettingsManager.Instance.Save(GetType(), cfg, name + ".assemblies");
+        }
+
         private void SavePackageConfig(PluginPackageWatchConfig cfg)
         {
             var name = GetPackageSettingsName();
@@ -615,18 +838,13 @@
 
         private void SaveProjectXml(Project project, string fileName)
         {
-            var serializer = new XmlSerializer(typeof(Project));
-
-            using (var writer = new StreamWriter(fileName))
+            try
             {
-                try
-                {
-                    serializer.Serialize(writer, project);
-                }
-                catch (Exception ex)
-                {
-                    ShowErrorDialog(ex, "Save Project");
-                }
+                ProjectFile.Save(project, fileName);
+            }
+            catch (Exception ex)
+            {
+                ShowErrorDialog(ex, "Save Project");
             }
         }
 
@@ -704,6 +922,11 @@
             }
 
             _pluginPackageSupportChecked = true;
+            _pluginPackageCheckPending = true;
+
+            // The check runs against this connection; if it changes before the answer comes, the answer is ignored
+            var generation = _connectionGeneration;
+            var service = Service;
 
             WorkAsync(new WorkAsyncInfo
             {
@@ -719,7 +942,7 @@
                             TopCount = 1
                         };
 
-                        Service.RetrieveMultiple(qe);
+                        service.RetrieveMultiple(qe);
                         a.Result = true;
                     }
                     catch
@@ -729,7 +952,13 @@
                 },
                 PostWorkCallBack = a =>
                 {
+                    if (generation != _connectionGeneration)
+                    {
+                        return;
+                    }
+
                     _pluginPackageSupported = a.Error == null && a.Result is bool b && b;
+                    _pluginPackageCheckPending = false;
 
                     bAddPackageMenuItem.Visible = _pluginPackageSupported;
 
@@ -740,6 +969,13 @@
                     else
                     {
                         ClearPluginPackageWatchers();
+                    }
+
+                    if (_pendingProjectPackages != null)
+                    {
+                        var packages = _pendingProjectPackages;
+                        _pendingProjectPackages = null;
+                        AddProjectPackages(packages);
                     }
                 }
             });

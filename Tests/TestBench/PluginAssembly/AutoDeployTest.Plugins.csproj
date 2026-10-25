@@ -1,0 +1,20 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- Classic (non-package) plugin assembly used to test AutoDeployer's plugin assembly watching -->
+  <PropertyGroup>
+    <TargetFramework>net462</TargetFramework>
+    <AssemblyName>AutoDeployTest.Plugins</AssemblyName>
+    <RootNamespace>AutoDeployTest.Plugins</RootNamespace>
+    <SignAssembly>true</SignAssembly>
+    <AssemblyOriginatorKeyFile>AutoDeployTest.snk</AssemblyOriginatorKeyFile>
+    <!-- AutoDeployer matches the registered assembly on name + Major.Minor, so keep 1.0.x -->
+    <AssemblyVersion>1.0.0.0</AssemblyVersion>
+    <FileVersion>1.0.0.0</FileVersion>
+    <CopyLocalLockFileAssemblies>false</CopyLocalLockFileAssemblies>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.CrmSdk.CoreAssemblies" Version="9.0.2.*" PrivateAssets="All" />
+    <PackageReference Include="Microsoft.NETFramework.ReferenceAssemblies" Version="1.0.*" PrivateAssets="All" />
+  </ItemGroup>
+</Project>

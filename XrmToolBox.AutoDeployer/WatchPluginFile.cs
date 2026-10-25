@@ -16,6 +16,10 @@ namespace XrmToolBox.AutoDeployer
         private Control owner;
         private IOrganizationService service;
 
+        // Set by Dispose. A change handler that's still waiting for the DLL checks it, so a removed watch
+        // never uploads (possibly to the connection it was created for).
+        private volatile bool disposed;
+
         #endregion Private Fields
 
         #region Public Constructors
@@ -87,8 +91,17 @@ namespace XrmToolBox.AutoDeployer
 
         public void Dispose()
         {
+            disposed = true;
+
+            // Watcher is null when the assembly/web resource was not found in Dataverse
+            if (Watcher == null)
+            {
+                return;
+            }
+            Watcher.EnableRaisingEvents = false;
             Watcher.Changed -= Plugin_Changed;
             Watcher.Created -= Plugin_Changed;
+            Watcher.Dispose();
         }
 
         #endregion Public Methods
@@ -153,6 +166,10 @@ namespace XrmToolBox.AutoDeployer
             // Waiting for plugin/webresource become fully available for reading
             while (true)
             {
+                if (disposed)
+                {
+                    return;
+                }
                 try
                 {
                     using (var stream = System.IO.File.Open(e.FullPath, FileMode.Open, FileAccess.Read, FileShare.Read))
@@ -186,6 +203,12 @@ namespace XrmToolBox.AutoDeployer
                     Status = "Updating...";
                     Log += DateTime.Now.ToString("HH:mm:ss.fff") + $" File updated\r\n";
                     UpdateList();
+
+                    // Removed while waiting for the file: don't upload
+                    if (disposed)
+                    {
+                        return;
+                    }
 
                     if (IsWebResource)
                     {

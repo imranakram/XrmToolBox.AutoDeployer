@@ -1,0 +1,131 @@
+using System.Linq;
+using NUnit.Framework;
+
+namespace XrmToolBox.AutoDeployer.Tests
+{
+    [TestFixture]
+    internal class WebResourceConfigMergerTests
+    {
+        #region Public Methods
+
+        [Test]
+        public void DifferentRootLeavesExistingUntouched()
+        {
+            var existing = Config(@"C:\src\wr", "a.js");
+            var incoming = Config(@"C:\other\wr", "b.js");
+
+            var result = WebResourceConfigMerger.Merge(existing, incoming);
+
+            Assert.That(result, Is.EqualTo(WebResourceMergeResult.RootDiffers));
+            Assert.That(existing.Mappings.Select(m => m.RelativePath), Is.EqualTo(new[] { "a.js" }));
+        }
+
+        [Test]
+        public void DifferentPrefixLeavesExistingUntouched()
+        {
+            // The manager rebuilds all CRM names from one prefix, so merging would retarget the imported watches
+            var existing = Config(@"C:\src\wr", "a.js");
+            var incoming = Config(@"C:\src\wr", "b.js");
+            incoming.Prefix = "other_/y";
+
+            var result = WebResourceConfigMerger.Merge(existing, incoming);
+
+            Assert.That(result, Is.EqualTo(WebResourceMergeResult.PrefixDiffers));
+            Assert.That(existing.Mappings.Select(m => m.RelativePath), Is.EqualTo(new[] { "a.js" }));
+            Assert.That(existing.Prefix, Is.EqualTo("adt_/x"));
+        }
+
+        [TestCase(false, true, ExpectedResult = true)]
+        [TestCase(true, false, ExpectedResult = true)]
+        [TestCase(false, false, ExpectedResult = false)]
+        public bool SameFileIsWatchedWhenEitherSideWatchesIt(bool existingActive, bool incomingActive)
+        {
+            var existing = Config(@"C:\src\wr", "a.js");
+            existing.Mappings[0].IsActive = existingActive;
+            var incoming = Config(@"C:\src\wr", "a.js");
+            incoming.Mappings[0].IsActive = incomingActive;
+
+            WebResourceConfigMerger.Merge(existing, incoming);
+
+            Assert.That(existing.Mappings, Has.Count.EqualTo(1));
+            return existing.Mappings[0].IsActive;
+        }
+
+        [Test]
+        public void MappingToATakenWebResourceIsSkipped()
+        {
+            var existing = Config(@"C:\src\wr", "a.js");
+            var incoming = Config(@"C:\src\wr", "b.js", "c.js");
+            // b.js would deploy to the web resource a.js already deploys to
+            incoming.Mappings[0].CrmName = "ADT_/x/a.js";
+
+            var result = WebResourceConfigMerger.Merge(existing, incoming);
+
+            Assert.That(result, Is.EqualTo(WebResourceMergeResult.Merged));
+            Assert.That(existing.Mappings.Select(m => m.RelativePath), Is.EqualTo(new[] { "a.js", "c.js" }));
+        }
+
+        [TestCase("adt_/x/")]
+        [TestCase(" ADT_/X ")]
+        [TestCase(@"adt_/x\")]
+        public void SamePrefixWrittenDifferentlyStillMerges(string incomingPrefix)
+        {
+            var existing = Config(@"C:\src\wr", "a.js");
+            var incoming = Config(@"C:\src\wr", "b.js");
+            incoming.Prefix = incomingPrefix;
+
+            Assert.That(WebResourceConfigMerger.Merge(existing, incoming), Is.EqualTo(WebResourceMergeResult.Merged));
+        }
+
+        [TestCase(null)]
+        [TestCase("")]
+        [TestCase(@"C:\src\wr")]
+        public void NothingConfiguredMeansReplace(string existingRoot)
+        {
+            // A root without any mappings counts as not configured too
+            var existing = new WebResourceWatchConfig { RootPath = existingRoot };
+            var incoming = Config(@"C:\src\wr", "a.js");
+
+            Assert.That(WebResourceConfigMerger.Merge(existing, incoming), Is.EqualTo(WebResourceMergeResult.Replaced));
+        }
+
+        [Test]
+        public void NullMappingsMeansReplace()
+        {
+            var existing = new WebResourceWatchConfig { RootPath = @"C:\src\wr", Mappings = null };
+
+            Assert.That(WebResourceConfigMerger.Merge(existing, Config(@"C:\src\wr", "a.js")), Is.EqualTo(WebResourceMergeResult.Replaced));
+        }
+
+        [TestCase(@"C:\src\wr")]
+        [TestCase(@"c:\SRC\WR")]
+        [TestCase(@"C:\src\wr\")]
+        [TestCase(@"C:/src/wr/")]
+        public void SameRootMergesWithoutDuplicates(string incomingRoot)
+        {
+            var existing = Config(@"C:\src\wr", "a.js", "b.js");
+            var incoming = Config(incomingRoot, "B.JS", "c.js");
+
+            var result = WebResourceConfigMerger.Merge(existing, incoming);
+
+            Assert.That(result, Is.EqualTo(WebResourceMergeResult.Merged));
+            Assert.That(existing.Mappings.Select(m => m.RelativePath), Is.EqualTo(new[] { "a.js", "b.js", "c.js" }));
+        }
+
+        #endregion Public Methods
+
+        #region Private Methods
+
+        private static WebResourceWatchConfig Config(string root, params string[] relativePaths)
+        {
+            var cfg = new WebResourceWatchConfig { RootPath = root, Prefix = "adt_/x" };
+            foreach (var rel in relativePaths)
+            {
+                cfg.Mappings.Add(new WebResourceMapping { RelativePath = rel, CrmName = "adt_/x/" + rel, IsActive = true });
+            }
+            return cfg;
+        }
+
+        #endregion Private Methods
+    }
+}

@@ -3,7 +3,7 @@ using System.Collections.Generic;
 
 namespace XrmToolBox.AutoDeployer
 {
-    public enum Type
+    public enum WatchFileType
     {
         PluginAssembly,
         PluginPackage,
@@ -23,6 +23,10 @@ namespace XrmToolBox.AutoDeployer
 
         public List<WatchFile> WatchFiles { get; set; } = new List<WatchFile>();
 
+        // Web resources are stored as their full settings (root folder + mappings),
+        // since a single file path is not enough to recreate a web resource watch.
+        public WebResourceWatchConfig WebResources { get; set; }
+
         #endregion Public Properties
     }
 
@@ -33,7 +37,7 @@ namespace XrmToolBox.AutoDeployer
         public Guid PackageId { get; set; }
         public string PackageName { get; set; }
         public string Path { get; set; }
-        public Type Type { get; set; }
+        public WatchFileType Type { get; set; }
 
         #endregion Public Properties
     }

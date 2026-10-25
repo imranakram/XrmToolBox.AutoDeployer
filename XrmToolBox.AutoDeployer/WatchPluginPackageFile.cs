@@ -305,8 +305,24 @@ namespace XrmToolBox.AutoDeployer
                     AppendLog("File updated");
                     UpdateList();
 
-                    // Your upload call (sync) - ok to call from here
-                    UploadPluginPackageNupkg(service, item.PackageId, fullPath);
+                    try
+                    {
+                        UploadPluginPackageNupkg(service, item.PackageId, fullPath);
+                    }
+                    catch (Exception) when (!PluginPackageLookup.Exists(service, item.PackageId))
+                    {
+                        // Package ids normally match across environments when deployed via solutions.
+                        // If not (e.g. watch came from a project file saved elsewhere), find the package by name.
+                        var resolvedId = PluginPackageLookup.FindIdByName(service, item.PackageName);
+                        if (resolvedId == Guid.Empty)
+                        {
+                            throw new InvalidOperationException(
+                                $"Plugin package '{item.PackageName}' ({item.PackageId}) does not exist in this environment. Remove it and add it again to select the right package.");
+                        }
+                        AppendLog($"Package id {item.PackageId} not found, using '{item.PackageName}' ({resolvedId}) found by name");
+                        item.PackageId = resolvedId;
+                        UploadPluginPackageNupkg(service, item.PackageId, fullPath);
+                    }
 
                     PluginUpdated = DateTime.Now;
                     Status = "Update ok";
@@ -380,20 +396,31 @@ namespace XrmToolBox.AutoDeployer
 
         private void Persist()
         {
+            // The save callback holds the package list this watcher was created from. Once the watcher is
+            // disposed (watchers replaced, connection changed), saving it would bring back removed watches,
+            // so check before queueing and again when the queued save runs.
+            Action persistIfAlive = () =>
+            {
+                if (Volatile.Read(ref _disposed) == 0)
+                {
+                    _persist();
+                }
+            };
+
             try
             {
-                if (owner.IsDisposed || !owner.IsHandleCreated)
+                if (Volatile.Read(ref _disposed) == 1 || owner.IsDisposed || !owner.IsHandleCreated)
                 {
                     return;
                 }
 
                 if (owner.InvokeRequired)
                 {
-                    owner.BeginInvoke(new Action(_persist));
+                    owner.BeginInvoke(persistIfAlive);
                 }
                 else
                 {
-                    _persist();
+                    persistIfAlive();
                 }
             }
             catch (Exception ex)

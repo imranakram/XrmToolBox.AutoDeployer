@@ -1,0 +1,44 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Template: Setup-Dataverse.ps1 writes a ready-to-open copy to Projects\Local.
+     Everything: plugin assembly, plugin package and web resources -->
+<Project xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:xsd="http://www.w3.org/2001/XMLSchema">
+  <WatchFiles>
+    <WatchFile>
+      <PackageId>00000000-0000-0000-0000-000000000000</PackageId>
+      <Path>$(TestBench)\PluginAssembly\bin\Debug\net462\AutoDeployTest.Plugins.dll</Path>
+      <Type>PluginAssembly</Type>
+    </WatchFile>
+    <WatchFile>
+      <PackageId>$(PackageId)</PackageId>
+      <PackageName>$(Prefix)_AutoDeployTest.Package</PackageName>
+      <Path>$(TestBench)\PluginPackage\bin\Debug\AutoDeployTest.Package.1.0.0.nupkg</Path>
+      <Type>PluginPackage</Type>
+    </WatchFile>
+  </WatchFiles>
+  <WebResources>
+    <DebounceMs>1500</DebounceMs>
+    <Mappings>
+      <WebResourceMapping>
+        <CrmName>$(Prefix)_/autodeploytest/scripts/test.js</CrmName>
+        <IsActive>true</IsActive>
+        <RelativePath>scripts\test.js</RelativePath>
+      </WebResourceMapping>
+      <WebResourceMapping>
+        <CrmName>$(Prefix)_/autodeploytest/styles/test.css</CrmName>
+        <IsActive>true</IsActive>
+        <RelativePath>styles\test.css</RelativePath>
+      </WebResourceMapping>
+      <WebResourceMapping>
+        <CrmName>$(Prefix)_/autodeploytest/pages/test.html</CrmName>
+        <IsActive>true</IsActive>
+        <RelativePath>pages\test.html</RelativePath>
+      </WebResourceMapping>
+    </Mappings>
+    <Patterns>*.js
+*.css
+*.html</Patterns>
+    <Prefix>$(Prefix)_/autodeploytest</Prefix>
+    <PublishEnabled>true</PublishEnabled>
+    <RootPath>$(TestBench)\WebResources</RootPath>
+  </WebResources>
+</Project>

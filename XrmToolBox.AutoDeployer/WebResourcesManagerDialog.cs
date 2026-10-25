@@ -51,14 +51,14 @@ namespace XrmToolBox.AutoDeployer
 
         #region Private Methods
 
-        private static string BuildCrmName(string prefix, string relativePath)
+        internal static string BuildCrmName(string prefix, string relativePath)
         {
             prefix = prefix.Trim().TrimEnd('/', '\\');
             var rel = relativePath.Replace('\\', '/').TrimStart('/');
             return $"{prefix}/{rel}";
         }
 
-        private static string GetRelativePath(string root, string fullPath)
+        internal static string GetRelativePath(string root, string fullPath)
         {
             var rootNorm = Path.GetFullPath(root.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar) + Path.DirectorySeparatorChar);
             var fullNorm = Path.GetFullPath(fullPath);
@@ -69,7 +69,7 @@ namespace XrmToolBox.AutoDeployer
             return fullNorm.Substring(rootNorm.Length);
         }
 
-        private static bool WildcardMatch(string input, string pattern)
+        internal static bool WildcardMatch(string input, string pattern)
         {
             // Very small glob: * and ? only, case-insensitive
             // Normalize slashes for matching

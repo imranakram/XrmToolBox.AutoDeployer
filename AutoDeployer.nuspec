@@ -13,14 +13,20 @@
 		<description>Tool to automatically upload plugin assemblies and web resources if they are changed during build process.</description>
 		<summary>Tool to automatically upload plugin assemblies and web resources if they are changed during build process.</summary>
 		<releaseNotes>
-- Added Web Resources auto-deploy: watch local files and upload/update Dataverse Web Resources on change.
-- New "Web Resources Manager" to configure root folder, prefix, scan patterns, and per-file mappings (enable/disable watch).
-- Plugin Assembly auto-deploy improvements: support for multiple assemblies, custom paths, and file patterns.
-- Plugin Package auto-deploy: watch .nupkg files created by Visual Studio and upload/update contained assemblies on change.
-- Debounce support to avoid multiple uploads during rapid saves.
-- Optional publish after update (configurable).
-- Configuration is persisted per environment/connection.
-- UI improvements: Add menu now supports both Plugin Assembly and Web Resources; watcher list supports both types; Remove selected works for both.
+New
+- Project files (#19, thanks Jonas Rapp): Save... writes the watched plugin assemblies, plugin packages and web resources (with their root folder and mappings) to an .adproj file. Open... loads it again, later or on another connection, and asks whether to keep or replace the current watchers.
+- Watched plugin assemblies are remembered per connection and come back when you reconnect, like plugin packages and web resources already did.
+- Plugin packages: when the saved package id doesn't exist in the connected environment, the package is looked up by name and the upload is retried.
+
+Fixes
+- Replacing the watchers when opening a project now really stops the old ones, instead of leaving them deploying in the background.
+- Plugin packages in a project are skipped, with a message, on environments that don't support them (on-premises). Opening a project right after connecting no longer skips them while that check is still running.
+- Open... and adding a plugin assembly need a connection first.
+- Removing a plugin assembly that wasn't found in Dataverse no longer throws an error, and its file watcher is released.
+
+Behind the scenes
+- Built, tested and released with GitHub Actions (#20); AppVeyor config removed.
+- Unit tests, plus local integration tests against a Dataverse test environment.
 		</releaseNotes>
 		<copyright>Copyright 2016-2026 Imran, Jonas, Oleksii</copyright>
 		<tags>XrmToolBox Plugins Auto Deployer Tool</tags>

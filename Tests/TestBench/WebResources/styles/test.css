@@ -1,0 +1,8 @@
+/* AutoDeployer test web resource: <prefix>_/autodeploytest/styles/test.css */
+/* Change the colour and save to trigger an upload + publish. */
+.autodeploytest-banner {
+    background-color: #2b6cb0;
+    color: #ffffff;
+    padding: 8px 12px;
+    font-family: "Segoe UI", sans-serif;
+}
