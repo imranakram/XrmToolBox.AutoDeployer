@@ -72,6 +72,10 @@
     </ProjectReference>
   </ItemGroup>
   <ItemGroup>
+    <!-- Same version as the plugin; XrmToolBoxPackage alone brings an older one -->
+    <PackageReference Include="MscrmTools.Xrm.Connection">
+      <Version>1.2025.9.64</Version>
+    </PackageReference>
     <PackageReference Include="NUnit">
       <Version>4.0.1</Version>
     </PackageReference>
