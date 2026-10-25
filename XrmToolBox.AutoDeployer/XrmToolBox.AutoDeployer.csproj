@@ -80,7 +80,10 @@
       <DependentUpon>About.cs</DependentUpon>
     </Compile>
     <Compile Include="PluginAssemblyWatchConfig.cs" />
+    <Compile Include="PluginPackageLookup.cs" />
     <Compile Include="Project.cs" />
+    <Compile Include="ProjectFile.cs" />
+    <Compile Include="WebResourceConfigMerger.cs" />
     <Compile Include="Constants.cs" />
     <Compile Include="DataverseFileUpload.cs" />
     <Compile Include="Destination.cs" />

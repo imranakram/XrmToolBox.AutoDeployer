@@ -2,10 +2,8 @@
 {
     using System;
     using System.Collections.Generic;
-    using System.IO;
     using System.Linq;
     using System.Windows.Forms;
-    using System.Xml.Serialization;
     using McTools.Xrm.Connection;
     using Microsoft.Xrm.Sdk;
     using Microsoft.Xrm.Sdk.Query;
@@ -567,19 +565,14 @@
 
         private Project LoadProjectXml(string fileName)
         {
-            var serializer = new XmlSerializer(typeof(Project));
-
-            using (var reader = new StreamReader(fileName))
+            try
             {
-                try
-                {
-                    return (Project)serializer.Deserialize(reader);
-                }
-                catch (Exception ex)
-                {
-                    ShowErrorDialog(ex, "Load Project");
-                    return null;
-                }
+                return ProjectFile.Load(fileName);
+            }
+            catch (Exception ex)
+            {
+                ShowErrorDialog(ex, "Load Project");
+                return null;
             }
         }
 
@@ -600,32 +593,25 @@
         private bool MergeWebResourceConfig(WebResourceWatchConfig projectCfg)
         {
             var cfg = LoadWebResourceConfig();
-            if (string.IsNullOrWhiteSpace(cfg.RootPath) || cfg.Mappings == null || cfg.Mappings.Count == 0)
+            switch (WebResourceConfigMerger.Merge(cfg, projectCfg))
             {
-                SaveWebResourceConfig(projectCfg);
-                return true;
-            }
+                case WebResourceMergeResult.Merged:
+                    SaveWebResourceConfig(cfg);
+                    return true;
 
-            if (!string.Equals(cfg.RootPath.TrimEnd('\\', '/'), projectCfg.RootPath.TrimEnd('\\', '/'), StringComparison.OrdinalIgnoreCase))
-            {
-                if (MessageBox.Show($"The project's web resources use the root folder\n{projectCfg.RootPath}\n\nbut this connection uses\n{cfg.RootPath}\n\nReplace this connection's web resource settings with the project's?",
-                    "AutoDeployer", MessageBoxButtons.YesNo, MessageBoxIcon.Question) != DialogResult.Yes)
-                {
-                    return false;
-                }
-                SaveWebResourceConfig(projectCfg);
-                return true;
-            }
+                case WebResourceMergeResult.RootDiffers:
+                    if (MessageBox.Show($"The project's web resources use the root folder\n{projectCfg.RootPath}\n\nbut this connection uses\n{cfg.RootPath}\n\nReplace this connection's web resource settings with the project's?",
+                        "AutoDeployer", MessageBoxButtons.YesNo, MessageBoxIcon.Question) != DialogResult.Yes)
+                    {
+                        return false;
+                    }
+                    SaveWebResourceConfig(projectCfg);
+                    return true;
 
-            foreach (var mapping in projectCfg.Mappings ?? new List<WebResourceMapping>())
-            {
-                if (!cfg.Mappings.Any(m => string.Equals(m.RelativePath, mapping.RelativePath, StringComparison.OrdinalIgnoreCase)))
-                {
-                    cfg.Mappings.Add(mapping);
-                }
+                default:
+                    SaveWebResourceConfig(projectCfg);
+                    return true;
             }
-            SaveWebResourceConfig(cfg);
-            return true;
         }
 
         private void Plugin_Changed(object sender, EventArgs e)
@@ -804,18 +790,13 @@
 
         private void SaveProjectXml(Project project, string fileName)
         {
-            var serializer = new XmlSerializer(typeof(Project));
-
-            using (var writer = new StreamWriter(fileName))
+            try
             {
-                try
-                {
-                    serializer.Serialize(writer, project);
-                }
-                catch (Exception ex)
-                {
-                    ShowErrorDialog(ex, "Save Project");
-                }
+                ProjectFile.Save(project, fileName);
+            }
+            catch (Exception ex)
+            {
+                ShowErrorDialog(ex, "Save Project");
             }
         }
 
