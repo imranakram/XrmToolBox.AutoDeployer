@@ -9,6 +9,13 @@ updates:
       - /Tests/XrmToolBox.AutoDeployer.Tests
     schedule:
       interval: weekly
+    # Only these. The other packages (System.Text.Json, Microsoft.Extensions.*, Newtonsoft.Json,
+    # MscrmTools.Xrm.Connection, ...) ship with XrmToolBox itself and are pinned to the versions it
+    # uses, so they're updated by hand together with XrmToolBoxPackage.
+    allow:
+      - dependency-name: XrmToolBoxPackage
+      - dependency-name: NUnit
+      - dependency-name: NUnit3TestAdapter
     groups:
       nuget:
         patterns:
