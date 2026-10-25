@@ -1,21 +1,78 @@
 # AutoDeployer test bench
 
 Test components and files for trying AutoDeployer against a real Dataverse environment, by hand
-(the test plan below) or through the integration tests in `XrmToolBox.AutoDeployer.Tests`.
-They are set up for a dev environment with a publisher **Biznamics** (prefix `biz`).
+(the [test plan](#test-plan) below) or through the integration tests in `XrmToolBox.AutoDeployer.Tests`.
 
-## Connection
+`XrmToolBox.AutoDeployer.Tests` has two kinds of tests:
 
-The scripts and the integration tests read a connection string from the `AUTODEPLOYER_TEST_CONNECTION`
-environment variable, or else from `Tests\connection.local.txt`. That file is gitignored. Never commit a
-connection string.
+| Kind | Needs | Runs in CI |
+|---|---|---|
+| Unit tests | Nothing | Yes |
+| Integration tests (category `Integration`) | A Dataverse environment, a connection string, the components below | No |
+
+Without a connection string the integration tests are **skipped**, not failed, so a fresh clone builds
+and tests fine. Web resources are only covered by the manual test plan, because that watcher runs through
+the XrmToolBox host.
+
+## Setting up a test environment
+
+You only do this once per environment.
+
+### 1. A Dataverse online environment
+A developer or trial environment you don't mind changing. It has to be online: plugin packages don't
+exist on-premises.
+
+The test components use the publisher prefix `biz`. Create a publisher with unique name **Biznamics** and
+prefix **biz** in that environment (make.powerapps.com → Solutions → Publishers), or `Setup-Dataverse.ps1`
+won't find it.
+
+### 2. An app registration with a client secret
+In the Azure portal → **Microsoft Entra ID → App registrations → New registration**. Any name, single tenant,
+no redirect URI. Then **Certificates & secrets → New client secret**.
+
+Copy the secret's **Value** right away (it's only shown once). The **Secret ID** next to it is not the secret.
+Also note the **Application (client) ID** on the Overview page.
+
+### 3. An application user in the environment
+In the [Power Platform admin center](https://admin.powerplatform.microsoft.com) → your environment →
+**Settings → Users + permissions → Application users → New app user**. Pick the app registration from
+step 2, any business unit, and the **System Administrator** security role (System Customizer is enough to
+register plugins and web resources, but in a test environment the simplest choice avoids surprises).
+
+### 4. The connection string
+One line, with your environment URL (no organization name in the path) and the values from step 2:
 
 ```
-AuthType=ClientSecret;Url=https://<org>.crm<n>.dynamics.com;ClientId=<app id>;ClientSecret=<secret>
+AuthType=ClientSecret;Url=https://<org>.crm<n>.dynamics.com;ClientId=<application id>;ClientSecret=<secret value>
 ```
 
-## First time
+Put it in **one** of these places. The environment variable wins when both are set.
 
+- **`Tests\connection.local.txt`** (recommended). Create the file next to this folder with only that line in it.
+  It's gitignored: check with `git check-ignore -v Tests\connection.local.txt`, which should print the
+  `.gitignore` rule.
+- **`AUTODEPLOYER_TEST_CONNECTION`** environment variable. For the current PowerShell window only:
+  ```powershell
+  $env:AUTODEPLOYER_TEST_CONNECTION = 'AuthType=ClientSecret;Url=...;ClientId=...;ClientSecret=...'
+  ```
+  Or for your Windows user, so Visual Studio sees it too (restart Visual Studio after setting it):
+  ```powershell
+  [Environment]::SetEnvironmentVariable('AUTODEPLOYER_TEST_CONNECTION', 'AuthType=ClientSecret;...', 'User')
+  ```
+
+Never commit a connection string, and don't paste it into issues or PRs.
+
+### 5. Check the connection
+From `Tests\TestBench`:
+
+```powershell
+.\Scripts\Check-Dataverse.ps1
+```
+
+No output means the connection works and nothing is registered yet. An error means the connection
+string or the app setup is wrong (see [Troubleshooting](#troubleshooting)).
+
+### 6. Build and register the test components
 From `Tests\TestBench`:
 
 ```powershell
@@ -24,16 +81,42 @@ dotnet build .\PluginPackage -c Debug
 .\Scripts\Setup-Dataverse.ps1
 ```
 
-## Automated tests
+`Setup-Dataverse.ps1` creates an unmanaged solution **AutoDeployTest** with the test plugin assembly, the
+plugin package and 3 web resources. It's safe to run again. `Check-Dataverse.ps1` should now list 5 rows.
 
-`XrmToolBox.AutoDeployer.Tests` has unit tests (run in CI) and integration tests (category `Integration`,
-local only). The integration tests deploy temp copies of these files and are skipped when no connection
-string is set, or when the components above aren't registered. Web resources are only covered by the
-test plan below, since that watcher needs the XrmToolBox host. Run them from the repo root with VSTest:
+## Running the tests
+
+Build the solution first (Visual Studio, or `msbuild XrmToolBox.AutoDeployer.sln -restore` from the repo root).
+
+**Visual Studio:** Test → Test Explorer. The integration tests are under the trait **Category: Integration**.
+Run everything, or right-click that group to run only those.
+
+**Command line**, from the repo root:
 
 ```powershell
-vstest.console.exe Tests\XrmToolBox.AutoDeployer.Tests\bin\Debug\XrmToolBox.AutoDeployer.Tests.dll /TestCaseFilter:"TestCategory=Integration"
+$vstest = & "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe" -products * -find "Common7\IDE\Extensions\TestPlatform\vstest.console.exe" | Select-Object -First 1
+$tests = "Tests\XrmToolBox.AutoDeployer.Tests\bin\Debug\XrmToolBox.AutoDeployer.Tests.dll"
+
+& $vstest $tests /TestCaseFilter:"TestCategory!=Integration"   # unit tests, like CI
+& $vstest $tests /TestCaseFilter:"TestCategory=Integration"    # integration tests
 ```
+
+The integration tests take about 20 seconds. Each one deploys a temp copy of a test file, so your working
+copies here aren't touched.
+
+## Troubleshooting
+
+| You see | Cause |
+|---|---|
+| Integration tests **skipped**: "No connection string" | Neither `Tests\connection.local.txt` nor `AUTODEPLOYER_TEST_CONNECTION` is set (Visual Studio started before the variable was set?) |
+| Skipped: "Build the test bench first" | Run the two `dotnet build` commands from step 6 |
+| Skipped: "Test components not found" | Run `Setup-Dataverse.ps1` (step 6) against the same environment |
+| `AADSTS7000215: Invalid client secret` | The Secret ID was copied instead of the Value, or the secret expired |
+| `AADSTS700016: Application ... was not found` | Wrong ClientId, or the app is in another tenant than the environment |
+| 404 on `.../XRMServices/2011/Organization.svc` | The URL has the organization name in the path, or `AuthType` isn't `ClientSecret` |
+| `The user is not a member of the organization` | No application user for the app in that environment (step 3) |
+| `Principal user ... is missing prv...` | The application user's security role is too limited (step 3) |
+| `Setup-Dataverse.ps1`: publisher not found | Create the **Biznamics** / `biz` publisher (step 1) |
 
 ## What's here
 
@@ -48,8 +131,8 @@ vstest.console.exe Tests\XrmToolBox.AutoDeployer.Tests\bin\Debug\XrmToolBox.Auto
 Everything in Dataverse lives in the unmanaged solution **AutoDeployTest** (publisher Biznamics, prefix `biz`).
 `Scripts\Cleanup-Dataverse.ps1` removes all of it.
 
-The test components are only there to be deployed over. The real assembly and packages in the environment
-(Rappen.Canary365, Innofactor, Cinteros) should never be watched with these files.
+The test components are only there to be deployed over. Never point these files at real plugin assemblies or
+packages in the environment (in imransdev: Rappen.Canary365, Innofactor, Cinteros).
 
 ## Sample projects
 
@@ -74,8 +157,9 @@ and the row in AutoDeployer shows `Update ok`.
 
 ## Test plan
 
-Start XrmToolBox, open AutoDeployer, connect to **imransdev**.
+Start XrmToolBox, open AutoDeployer, connect to your test environment (below: **imransdev**).
 Start with an empty list (remove anything left from earlier tests).
+The sample projects expect the repo at `C:\Github\XrmToolBox.AutoDeployer`; edit the paths in a copy if yours is elsewhere.
 
 ### 1. Open a project
 1. Open… `AutoDeployTest.adproj`.

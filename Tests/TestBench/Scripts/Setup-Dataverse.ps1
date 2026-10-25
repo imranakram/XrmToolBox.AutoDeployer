@@ -9,6 +9,7 @@ $solution = 'AutoDeployTest'
 # Solution
 if (-not (Get-DvFirst "solutions?`$select=solutionid&`$filter=uniquename eq '$solution'")) {
     $publisher = Get-DvFirst "publishers?`$select=publisherid&`$filter=uniquename eq 'Biznamics'"
+    if (-not $publisher) { throw "Publisher not found: create a publisher with unique name 'Biznamics' and prefix 'biz' first" }
     Invoke-Dv -Method Post -Path 'solutions' -Body @{
         uniquename = $solution; friendlyname = 'AutoDeployer Test'; version = '1.0.0.0'
         'publisherid@odata.bind' = "/publishers($($publisher.publisherid))"
