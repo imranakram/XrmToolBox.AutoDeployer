@@ -89,6 +89,38 @@ jobs:
       - name: Build solution (Release)
         run: msbuild XrmToolBox.AutoDeployer.sln -restore /p:Configuration=Release /p:Platform="Any CPU" /m /v:minimal /nologo
 
+      - name: Locate VSTest
+        id: vstest
+        shell: pwsh
+        run: |
+          $vswhere = Join-Path ${env:ProgramFiles(x86)} "Microsoft Visual Studio\Installer\vswhere.exe"
+          if (-not (Test-Path $vswhere)) { throw "vswhere.exe not found at $vswhere" }
+          $console = & $vswhere -products * `
+                       -find "Common7\IDE\Extensions\TestPlatform\vstest.console.exe" | Select-Object -First 1
+          if (-not $console) { throw "vstest.console.exe not found by vswhere" }
+          "PATH=$console" >> $env:GITHUB_OUTPUT
+          Write-Host "Found $console"
+
+      # Unit tests only: the Integration tests need a Dataverse environment and run locally
+      - name: Run tests (Release)
+        shell: pwsh
+        run: |
+          & "${{ steps.vstest.outputs.PATH }}" `
+            "Tests\XrmToolBox.AutoDeployer.Tests\bin\Release\XrmToolBox.AutoDeployer.Tests.dll" `
+            /Framework:.NETFramework,Version=v4.8 `
+            /TestCaseFilter:"TestCategory!=Integration" `
+            /Logger:"trx;LogFileName=XrmToolBox.AutoDeployer.Tests.trx" `
+            /ResultsDirectory:TestResults
+          if ($LASTEXITCODE -ne 0) { throw "Tests failed with exit code $LASTEXITCODE" }
+
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-results-${{ steps.version.outputs.VERSION }}
+          path: TestResults/*.trx
+          if-no-files-found: ignore
+
       - name: NuGet pack
         shell: pwsh
         run: |
