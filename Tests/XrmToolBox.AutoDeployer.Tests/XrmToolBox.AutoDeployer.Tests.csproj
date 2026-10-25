@@ -1,0 +1,86 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="15.0" DefaultTargets="Build" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <Import Project="$(MSBuildExtensionsPath)\$(MSBuildToolsVersion)\Microsoft.Common.props" Condition="Exists('$(MSBuildExtensionsPath)\$(MSBuildToolsVersion)\Microsoft.Common.props')" />
+  <PropertyGroup>
+    <Configuration Condition=" '$(Configuration)' == '' ">Debug</Configuration>
+    <Platform Condition=" '$(Platform)' == '' ">AnyCPU</Platform>
+    <ProjectGuid>{6E1F3C2A-8B4D-4F7E-9A5C-2D8E1B7F4A93}</ProjectGuid>
+    <OutputType>Library</OutputType>
+    <AppDesignerFolder>Properties</AppDesignerFolder>
+    <RootNamespace>XrmToolBox.AutoDeployer.Tests</RootNamespace>
+    <AssemblyName>XrmToolBox.AutoDeployer.Tests</AssemblyName>
+    <TargetFrameworkVersion>v4.8</TargetFrameworkVersion>
+    <FileAlignment>512</FileAlignment>
+    <LangVersion>latest</LangVersion>
+    <!-- The SDK and Tooling Connector need binding redirects, which a library doesn't get by default -->
+    <AutoGenerateBindingRedirects>true</AutoGenerateBindingRedirects>
+    <GenerateBindingRedirectsOutputType>true</GenerateBindingRedirectsOutputType>
+  </PropertyGroup>
+  <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Debug|AnyCPU' ">
+    <DebugSymbols>true</DebugSymbols>
+    <DebugType>full</DebugType>
+    <Optimize>false</Optimize>
+    <OutputPath>bin\Debug\</OutputPath>
+    <DefineConstants>DEBUG;TRACE</DefineConstants>
+    <ErrorReport>prompt</ErrorReport>
+    <WarningLevel>4</WarningLevel>
+  </PropertyGroup>
+  <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Release|AnyCPU' ">
+    <DebugType>pdbonly</DebugType>
+    <Optimize>true</Optimize>
+    <OutputPath>bin\Release\</OutputPath>
+    <DefineConstants>TRACE</DefineConstants>
+    <ErrorReport>prompt</ErrorReport>
+    <WarningLevel>4</WarningLevel>
+  </PropertyGroup>
+  <!-- The plugin's Debug post-build moves its dll into bin\Debug\Plugins (for running XrmToolBox from bin),
+       so reference the dll where each configuration leaves it, and use the project reference only for build order -->
+  <PropertyGroup>
+    <PluginOutput Condition=" '$(Configuration)' == 'Debug' ">..\..\XrmToolBox.AutoDeployer\bin\Debug\Plugins\</PluginOutput>
+    <PluginOutput Condition=" '$(Configuration)' != 'Debug' ">..\..\XrmToolBox.AutoDeployer\bin\$(Configuration)\</PluginOutput>
+  </PropertyGroup>
+  <ItemGroup>
+    <Reference Include="ImranAkram.XTB.AutoDeployer">
+      <HintPath>$(PluginOutput)ImranAkram.XTB.AutoDeployer.dll</HintPath>
+    </Reference>
+    <Reference Include="System" />
+    <Reference Include="System.Core" />
+    <Reference Include="System.Drawing" />
+    <Reference Include="System.Runtime.Serialization" />
+    <Reference Include="System.ServiceModel" />
+    <Reference Include="System.Windows.Forms" />
+    <Reference Include="System.Xml" />
+    <Reference Include="System.Xml.Linq" />
+    <Reference Include="Microsoft.CSharp" />
+  </ItemGroup>
+  <ItemGroup>
+    <Compile Include="Fakes\FakeOrganizationService.cs" />
+    <Compile Include="Integration\DataverseFixture.cs" />
+    <Compile Include="Integration\WatcherIntegrationTests.cs" />
+    <Compile Include="PluginPackageLookupTests.cs" />
+    <Compile Include="ProjectFileTests.cs" />
+    <Compile Include="Properties\AssemblyInfo.cs" />
+    <Compile Include="TestBench.cs" />
+    <Compile Include="WebResourceConfigMergerTests.cs" />
+    <Compile Include="WebResourceNamingTests.cs" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\..\XrmToolBox.AutoDeployer\XrmToolBox.AutoDeployer.csproj">
+      <Project>{3C865935-8376-4B29-BBF2-9EEEB08FA9EA}</Project>
+      <Name>XrmToolBox.AutoDeployer</Name>
+      <ReferenceOutputAssembly>false</ReferenceOutputAssembly>
+    </ProjectReference>
+  </ItemGroup>
+  <ItemGroup>
+    <PackageReference Include="NUnit">
+      <Version>4.0.1</Version>
+    </PackageReference>
+    <PackageReference Include="NUnit3TestAdapter">
+      <Version>4.5.0</Version>
+    </PackageReference>
+    <PackageReference Include="XrmToolBoxPackage">
+      <Version>1.2025.10.74</Version>
+    </PackageReference>
+  </ItemGroup>
+  <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
+</Project>

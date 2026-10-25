@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Web resources under a different root folder than AutoDeployTest.adproj.
+     Open this while the web resources from AutoDeployTest.adproj are loaded and answer "Yes, keep":
+     you should be asked whether to replace the connection's web resource settings. -->
+<Project xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:xsd="http://www.w3.org/2001/XMLSchema">
+  <WatchFiles />
+  <WebResources>
+    <DebounceMs>1500</DebounceMs>
+    <Mappings>
+      <WebResourceMapping>
+        <CrmName>biz_/autodeploytest/scripts/test.js</CrmName>
+        <IsActive>true</IsActive>
+        <RelativePath>test.js</RelativePath>
+      </WebResourceMapping>
+    </Mappings>
+    <Patterns>*.js</Patterns>
+    <Prefix>biz_/autodeploytest/scripts</Prefix>
+    <PublishEnabled>true</PublishEnabled>
+    <RootPath>C:\Github\XrmToolBox.AutoDeployer\Tests\TestBench\WebResources\scripts</RootPath>
+  </WebResources>
+</Project>

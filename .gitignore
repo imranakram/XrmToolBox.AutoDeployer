@@ -1,4 +1,7 @@
 
+# Connection string for the integration tests and test bench scripts
+Tests/connection.local.txt
+
 # Created by https://www.gitignore.io/api/visualstudio
 
 ### VisualStudio ###

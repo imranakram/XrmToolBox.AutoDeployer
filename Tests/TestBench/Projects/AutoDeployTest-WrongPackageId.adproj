@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Package id that doesn't exist in this environment, but the right package name.
+     The first upload should fail, find biz_AutoDeployTest.Package by name, and retry. -->
+<Project xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:xsd="http://www.w3.org/2001/XMLSchema">
+  <WatchFiles>
+    <WatchFile>
+      <PackageId>11111111-2222-3333-4444-555555555555</PackageId>
+      <PackageName>biz_AutoDeployTest.Package</PackageName>
+      <Path>C:\Github\XrmToolBox.AutoDeployer\Tests\TestBench\PluginPackage\bin\Debug\AutoDeployTest.Package.1.0.0.nupkg</Path>
+      <Type>PluginPackage</Type>
+    </WatchFile>
+  </WatchFiles>
+</Project>

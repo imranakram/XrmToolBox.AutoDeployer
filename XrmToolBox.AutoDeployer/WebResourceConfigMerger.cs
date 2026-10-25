@@ -48,7 +48,10 @@ namespace XrmToolBox.AutoDeployer
         #region Private Methods
 
         private static bool SameFolder(string a, string b)
-            => string.Equals((a ?? "").TrimEnd('\\', '/'), (b ?? "").TrimEnd('\\', '/'), StringComparison.OrdinalIgnoreCase);
+            => string.Equals(NormalizeFolder(a), NormalizeFolder(b), StringComparison.OrdinalIgnoreCase);
+
+        private static string NormalizeFolder(string path)
+            => (path ?? "").Replace('/', '\\').TrimEnd('\\');
 
         #endregion Private Methods
     }
