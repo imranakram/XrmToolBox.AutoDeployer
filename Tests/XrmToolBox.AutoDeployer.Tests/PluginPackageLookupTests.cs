@@ -55,7 +55,7 @@ namespace XrmToolBox.AutoDeployer.Tests
         {
             var service = new FakeOrganizationService(q => FakeOrganizationService.Records("pluginpackage", IdA, IdB));
 
-            Assert.That(PluginPackageLookup.FindIdByName(service, "biz_Pkg"), Is.EqualTo(Guid.Empty));
+            Assert.That(PluginPackageLookup.FindIdByName(service, "adt_Pkg"), Is.EqualTo(Guid.Empty));
         }
 
         [Test]
@@ -63,7 +63,7 @@ namespace XrmToolBox.AutoDeployer.Tests
         {
             var service = new FakeOrganizationService(q => FakeOrganizationService.Records("pluginpackage"));
 
-            Assert.That(PluginPackageLookup.FindIdByName(service, "biz_Pkg"), Is.EqualTo(Guid.Empty));
+            Assert.That(PluginPackageLookup.FindIdByName(service, "adt_Pkg"), Is.EqualTo(Guid.Empty));
         }
 
         [Test]
@@ -71,14 +71,14 @@ namespace XrmToolBox.AutoDeployer.Tests
         {
             var service = new FakeOrganizationService(q => FakeOrganizationService.Records("pluginpackage", IdA));
 
-            Assert.That(PluginPackageLookup.FindIdByName(service, "biz_Pkg"), Is.EqualTo(IdA));
+            Assert.That(PluginPackageLookup.FindIdByName(service, "adt_Pkg"), Is.EqualTo(IdA));
 
             var query = service.Queries.Single();
             Assert.That(query.EntityName, Is.EqualTo("pluginpackage"));
             var condition = query.Criteria.Conditions.Single();
             Assert.That(condition.AttributeName, Is.EqualTo("name"));
             Assert.That(condition.Operator, Is.EqualTo(ConditionOperator.Equal));
-            Assert.That(condition.Values.Single(), Is.EqualTo("biz_Pkg"));
+            Assert.That(condition.Values.Single(), Is.EqualTo("adt_Pkg"));
         }
 
         [Test]

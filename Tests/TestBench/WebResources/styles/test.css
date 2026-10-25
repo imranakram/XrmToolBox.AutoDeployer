@@ -1,4 +1,4 @@
-/* AutoDeployer test web resource: biz_/autodeploytest/styles/test.css */
+/* AutoDeployer test web resource: <prefix>_/autodeploytest/styles/test.css */
 /* Change the colour and save to trigger an upload + publish. */
 .autodeploytest-banner {
     background-color: #2b6cb0;

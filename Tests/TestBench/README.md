@@ -22,9 +22,15 @@ You only do this once per environment.
 A developer or trial environment you don't mind changing. It has to be online: plugin packages don't
 exist on-premises.
 
-The test components use the publisher prefix `biz`. Create a publisher with unique name **Biznamics** and
-prefix **biz** in that environment (make.powerapps.com → Solutions → Publishers), or `Setup-Dataverse.ps1`
-won't find it.
+Decide which **publisher** the test components belong to. It's an input (step 4):
+- **Your own publisher**, e.g. unique name `Biznamics` with prefix `biz`. It's used as it is and never deleted.
+- **Nothing set:** the test bench creates its own publisher **AutoDeployTest** with prefix **adt**, and
+  `Cleanup-Dataverse.ps1` removes it again.
+
+The prefix ends up in the component names (`<prefix>_AutoDeployTest.Package`, `<prefix>_/autodeploytest/...`),
+so the integration tests and the sample projects need it too. Use one prefix per environment at a time: the
+plugin assembly and the solution have the same name for every prefix, so run `Cleanup-Dataverse.ps1` with the
+old settings before switching.
 
 ### 2. An app registration with a client secret
 In the Azure portal → **Microsoft Entra ID → App registrations → New registration**. Any name, single tenant,
@@ -39,26 +45,39 @@ In the [Power Platform admin center](https://admin.powerplatform.microsoft.com) 
 step 2, any business unit, and the **System Administrator** security role (System Customizer is enough to
 register plugins and web resources, but in a test environment the simplest choice avoids surprises).
 
-### 4. The connection string
-One line, with your environment URL (no organization name in the path) and the values from step 2:
+### 4. The settings: connection string, publisher, prefix
+Copy `Tests\testbench.example.json` to **`Tests\testbench.local.json`** and fill it in:
 
+```json
+{
+  "connection": "AuthType=ClientSecret;Url=https://<org>.crm<n>.dynamics.com;ClientId=<application id>;ClientSecret=<secret value>",
+  "publisher": "Biznamics",
+  "prefix": "biz"
+}
 ```
-AuthType=ClientSecret;Url=https://<org>.crm<n>.dynamics.com;ClientId=<application id>;ClientSecret=<secret value>
+
+- **connection**: your environment URL (no organization name in the path) and the values from step 2.
+- **publisher** / **prefix**: the publisher's unique name and its customization prefix (step 1). Leave both
+  out for the test bench's own `AutoDeployTest` / `adt`. When the publisher exists, its prefix has to match.
+
+`testbench.local.json` is gitignored: `git check-ignore -v Tests\testbench.local.json` should print the
+`.gitignore` rule. The scripts and the integration tests read the same file.
+
+Each value can also come from an environment variable, which wins over the file. That's handy for a build
+agent, or to try another publisher without editing the file:
+
+| Setting | Environment variable |
+|---|---|
+| connection | `AUTODEPLOYER_TEST_CONNECTION` |
+| publisher | `AUTODEPLOYER_TEST_PUBLISHER` |
+| prefix | `AUTODEPLOYER_TEST_PREFIX` |
+
+```powershell
+# This PowerShell window only
+$env:AUTODEPLOYER_TEST_PREFIX = 'biz'
+# For your Windows user, so Visual Studio sees it too (restart Visual Studio afterwards)
+[Environment]::SetEnvironmentVariable('AUTODEPLOYER_TEST_PREFIX', 'biz', 'User')
 ```
-
-Put it in **one** of these places. The environment variable wins when both are set.
-
-- **`Tests\connection.local.txt`** (recommended). Create the file next to this folder with only that line in it.
-  It's gitignored: check with `git check-ignore -v Tests\connection.local.txt`, which should print the
-  `.gitignore` rule.
-- **`AUTODEPLOYER_TEST_CONNECTION`** environment variable. For the current PowerShell window only:
-  ```powershell
-  $env:AUTODEPLOYER_TEST_CONNECTION = 'AuthType=ClientSecret;Url=...;ClientId=...;ClientSecret=...'
-  ```
-  Or for your Windows user, so Visual Studio sees it too (restart Visual Studio after setting it):
-  ```powershell
-  [Environment]::SetEnvironmentVariable('AUTODEPLOYER_TEST_CONNECTION', 'AuthType=ClientSecret;...', 'User')
-  ```
 
 Never commit a connection string, and don't paste it into issues or PRs.
 
@@ -81,8 +100,10 @@ dotnet build .\PluginPackage -c Debug
 .\Scripts\Setup-Dataverse.ps1
 ```
 
-`Setup-Dataverse.ps1` creates an unmanaged solution **AutoDeployTest** with the test plugin assembly, the
-plugin package and 3 web resources. It's safe to run again. `Check-Dataverse.ps1` should now list 5 rows.
+`Setup-Dataverse.ps1` creates the publisher if needed, and an unmanaged solution **AutoDeployTest** with the
+test plugin assembly, the plugin package and 3 web resources. It also writes the sample projects, filled in
+for this clone and environment, to `Projects\Local` (gitignored). It's safe to run again.
+`Check-Dataverse.ps1` should now list 5 rows.
 
 ## Running the tests
 
@@ -108,33 +129,38 @@ copies here aren't touched.
 
 | You see | Cause |
 |---|---|
-| Integration tests **skipped**: "No connection string" | Neither `Tests\connection.local.txt` nor `AUTODEPLOYER_TEST_CONNECTION` is set (Visual Studio started before the variable was set?) |
+| Integration tests **skipped**: "No connection string" | No `connection` in `Tests\testbench.local.json` and no `AUTODEPLOYER_TEST_CONNECTION` (Visual Studio started before the variable was set?) |
 | Skipped: "Build the test bench first" | Run the two `dotnet build` commands from step 6 |
-| Skipped: "Test components not found" | Run `Setup-Dataverse.ps1` (step 6) against the same environment |
+| Skipped: "Test components with prefix '...' not found" | Run `Setup-Dataverse.ps1` (step 6) with the same environment and prefix as the tests |
+| `Publisher '...' has the prefix '...', not '...'` | The `prefix` setting doesn't match the existing publisher |
+| `The prefix '...' is already used by publisher '...'` | Set `publisher` to that publisher, or choose another prefix |
 | `AADSTS7000215: Invalid client secret` | The Secret ID was copied instead of the Value, or the secret expired |
 | `AADSTS700016: Application ... was not found` | Wrong ClientId, or the app is in another tenant than the environment |
 | 404 on `.../XRMServices/2011/Organization.svc` | The URL has the organization name in the path, or `AuthType` isn't `ClientSecret` |
 | `The user is not a member of the organization` | No application user for the app in that environment (step 3) |
 | `Principal user ... is missing prv...` | The application user's security role is too limited (step 3) |
-| `Setup-Dataverse.ps1`: publisher not found | Create the **Biznamics** / `biz` publisher (step 1) |
 
 ## What's here
 
 | Folder | What |
 |---|---|
 | `PluginAssembly\` | Classic plugin assembly `AutoDeployTest.Plugins` (registered, 1 plugin type, no steps) |
-| `PluginPackage\` | Plugin package, registered as `biz_AutoDeployTest.Package` |
-| `WebResources\` | Root folder for 3 web resources, registered as `biz_/autodeploytest/...` |
-| `Projects\` | Sample `.adproj` files (see below) |
+| `PluginPackage\` | Plugin package, registered as `<prefix>_AutoDeployTest.Package` |
+| `WebResources\` | Root folder for 3 web resources, registered as `<prefix>_/autodeploytest/...` |
+| `Projects\` | Sample project templates (see below) |
+| `Projects\Local\` | The templates filled in by `Setup-Dataverse.ps1` (gitignored): open these |
 | `Scripts\` | `Setup-Dataverse.ps1`, `Cleanup-Dataverse.ps1`, `Bump.ps1`, `Check-Dataverse.ps1` |
 
-Everything in Dataverse lives in the unmanaged solution **AutoDeployTest** (publisher Biznamics, prefix `biz`).
-`Scripts\Cleanup-Dataverse.ps1` removes all of it.
+Everything in Dataverse lives in the unmanaged solution **AutoDeployTest**, under the configured publisher.
+`Scripts\Cleanup-Dataverse.ps1` removes all of it, and the publisher too if the test bench created it.
 
 The test components are only there to be deployed over. Never point these files at real plugin assemblies or
-packages in the environment (in imransdev: Rappen.Canary365, Innofactor, Cinteros).
+packages in the environment, such as another tool's assembly or a third-party managed package.
 
 ## Sample projects
+
+The files in `Projects\` are templates with placeholders for the test bench folder, the prefix and the
+package id. Open the filled-in copies in **`Projects\Local`**, which `Setup-Dataverse.ps1` writes.
 
 | File | Use |
 |---|---|
@@ -157,22 +183,22 @@ and the row in AutoDeployer shows `Update ok`.
 
 ## Test plan
 
-Start XrmToolBox, open AutoDeployer, connect to your test environment (below: **imransdev**).
+Start XrmToolBox, open AutoDeployer, connect to your test environment.
 Start with an empty list (remove anything left from earlier tests).
-The sample projects expect the repo at `C:\Github\XrmToolBox.AutoDeployer`; edit the paths in a copy if yours is elsewhere.
+Open the sample projects from `Projects\Local` (run `Setup-Dataverse.ps1` first).
 
 ### 1. Open a project
-1. Open… `AutoDeployTest.adproj`.
-2. Expect 5 rows: the assembly, `PKG: biz_AutoDeployTest.Package` and 3 web resources.
-   The status bar should show `Web resources: 3 active (of 3) — Root: C:\Github\XrmToolBox.AutoDeployer\Tests\TestBench\WebResources`.
+1. Open… `Projects\Local\AutoDeployTest.adproj`.
+2. Expect 5 rows: the assembly, `PKG: <prefix>_AutoDeployTest.Package` and 3 web resources.
+   The status bar should show `Web resources: 3 active (of 3) — Root: <this folder>\WebResources`.
 3. Run each `Bump.ps1` option and check the row shows `Update ok` and `Check-Dataverse.ps1` shows a new time.
 
 ### 2. Reload per connection (new: assemblies too)
-1. With the list from test 1, close the AutoDeployer tab and open it again (or reconnect to imransdev).
+1. With the list from test 1, close the AutoDeployer tab and open it again (or reconnect).
 2. Expect the same 5 rows back without opening the project. Before this change the assembly would be missing.
 3. `Bump.ps1 Assembly` and check it still deploys.
 4. Connect to another environment (if you have one): the list should switch to that connection's watches.
-   Connect back to imransdev: the 5 rows come back.
+   Connect back: the 5 rows come back.
 
 ### 3. Remove selected
 1. Select the assembly row and click Remove. Reconnect.
@@ -199,13 +225,13 @@ The sample projects expect the repo at `C:\Github\XrmToolBox.AutoDeployer`; edit
 1. Remove the package row if it's there.
 2. Open `AutoDeployTest-WrongPackageId.adproj`.
 3. `Bump.ps1 Package`.
-4. Expect `Update ok` and a log line like `Package id 11111111-... not found, using 'biz_AutoDeployTest.Package' (7c2c3f3a-...) found by name`.
-5. Save… the project somewhere and open the file: the PackageId should now be `7c2c3f3a-67d0-f111-a05b-7ced8d3ebe2f`.
+4. Expect `Update ok` and a log line like `Package id 11111111-... not found, using '<prefix>_AutoDeployTest.Package' (<real id>) found by name`.
+5. Save… the project somewhere and open the file: the PackageId should now be the real one (the same as in `Projects\Local\AutoDeployTest.adproj`).
 6. Optional failure case: edit a copy of the file so PackageName is also wrong. The upload should fail with
    "does not exist in this environment. Remove it and add it again…".
 
 ### 7. Open right after connecting (support check timing)
-1. Reconnect to imransdev and click Open… `AutoDeployTest.adproj` immediately.
+1. Reconnect and click Open… `AutoDeployTest.adproj` immediately.
 2. Expect the package to be added once the check finishes, not skipped with the "only supported online" message.
 
 ### 8. Guards

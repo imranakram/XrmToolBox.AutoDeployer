@@ -1,6 +1,9 @@
 
-# Connection string for the integration tests and test bench scripts
+# Settings (connection string, publisher, prefix) for the integration tests and test bench scripts
+Tests/testbench.local.json
 Tests/connection.local.txt
+# Sample projects generated for this clone and environment by Setup-Dataverse.ps1
+Tests/TestBench/Projects/Local/
 
 # Created by https://www.gitignore.io/api/visualstudio
 

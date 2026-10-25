@@ -7,10 +7,10 @@ namespace XrmToolBox.AutoDeployer.Tests
     {
         #region Public Methods
 
-        [TestCase("biz_/app", @"scripts\main.js", ExpectedResult = "biz_/app/scripts/main.js")]
-        [TestCase("biz_/app/", "scripts/main.js", ExpectedResult = "biz_/app/scripts/main.js")]
-        [TestCase(@" biz_/app\ ", @"\main.js", ExpectedResult = "biz_/app/main.js")]
-        [TestCase("biz_", "main.js", ExpectedResult = "biz_/main.js")]
+        [TestCase("adt_/app", @"scripts\main.js", ExpectedResult = "adt_/app/scripts/main.js")]
+        [TestCase("adt_/app/", "scripts/main.js", ExpectedResult = "adt_/app/scripts/main.js")]
+        [TestCase(@" adt_/app\ ", @"\main.js", ExpectedResult = "adt_/app/main.js")]
+        [TestCase("adt_", "main.js", ExpectedResult = "adt_/main.js")]
         public string BuildCrmName(string prefix, string relativePath)
             => WebResourcesManagerDialog.BuildCrmName(prefix, relativePath);
 

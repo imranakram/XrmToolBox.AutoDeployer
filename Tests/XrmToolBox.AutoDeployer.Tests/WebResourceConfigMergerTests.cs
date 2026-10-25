@@ -61,10 +61,10 @@ namespace XrmToolBox.AutoDeployer.Tests
 
         private static WebResourceWatchConfig Config(string root, params string[] relativePaths)
         {
-            var cfg = new WebResourceWatchConfig { RootPath = root, Prefix = "biz_/x" };
+            var cfg = new WebResourceWatchConfig { RootPath = root, Prefix = "adt_/x" };
             foreach (var rel in relativePaths)
             {
-                cfg.Mappings.Add(new WebResourceMapping { RelativePath = rel, CrmName = "biz_/x/" + rel, IsActive = true });
+                cfg.Mappings.Add(new WebResourceMapping { RelativePath = rel, CrmName = "adt_/x/" + rel, IsActive = true });
             }
             return cfg;
         }

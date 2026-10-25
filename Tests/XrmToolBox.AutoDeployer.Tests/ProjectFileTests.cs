@@ -37,7 +37,7 @@ namespace XrmToolBox.AutoDeployer.Tests
         [Test]
         public void LegacySampleHasWebResourcePathsButNoSettings()
         {
-            var project = ProjectFile.Load(TestBench.PathTo(@"Projects\AutoDeployTest-Legacy.adproj"));
+            var project = TestBench.LoadSampleProject("AutoDeployTest-Legacy.adproj");
 
             Assert.That(project.WebResources, Is.Null);
             Assert.That(project.WatchFiles.Select(w => w.Type),
@@ -47,19 +47,20 @@ namespace XrmToolBox.AutoDeployer.Tests
         [Test]
         public void MainSampleLoads()
         {
-            var project = ProjectFile.Load(TestBench.PathTo(@"Projects\AutoDeployTest.adproj"));
+            var project = TestBench.LoadSampleProject("AutoDeployTest.adproj");
+            var prefix = TestBench.SamplePrefix;
 
             Assert.That(project.WatchFiles.Select(w => w.Type),
                 Is.EqualTo(new[] { WatchFileType.PluginAssembly, WatchFileType.PluginPackage }));
             var package = project.WatchFiles.Single(w => w.Type == WatchFileType.PluginPackage);
-            Assert.That(package.PackageId, Is.EqualTo(PackageId));
-            Assert.That(package.PackageName, Is.EqualTo("biz_AutoDeployTest.Package"));
-            Assert.That(project.WebResources.Prefix, Is.EqualTo("biz_/autodeploytest"));
+            Assert.That(package.PackageId, Is.EqualTo(TestBench.SamplePackageId));
+            Assert.That(package.PackageName, Is.EqualTo($"{prefix}_AutoDeployTest.Package"));
+            Assert.That(project.WebResources.Prefix, Is.EqualTo($"{prefix}_/autodeploytest"));
             Assert.That(project.WebResources.Mappings.Select(m => m.CrmName), Is.EquivalentTo(new[]
             {
-                "biz_/autodeploytest/scripts/test.js",
-                "biz_/autodeploytest/styles/test.css",
-                "biz_/autodeploytest/pages/test.html"
+                $"{prefix}_/autodeploytest/scripts/test.js",
+                $"{prefix}_/autodeploytest/styles/test.css",
+                $"{prefix}_/autodeploytest/pages/test.html"
             }));
             Assert.That(project.WebResources.Patterns.Split(new[] { '\r', '\n' }, StringSplitOptions.RemoveEmptyEntries),
                 Is.EqualTo(new[] { "*.js", "*.css", "*.html" }));
@@ -68,11 +69,38 @@ namespace XrmToolBox.AutoDeployer.Tests
         [Test]
         public void OtherRootSampleHasOnlyWebResources()
         {
-            var project = ProjectFile.Load(TestBench.PathTo(@"Projects\AutoDeployTest-OtherRoot.adproj"));
+            var project = TestBench.LoadSampleProject("AutoDeployTest-OtherRoot.adproj");
 
             Assert.That(project.WatchFiles, Is.Empty);
-            Assert.That(project.WebResources.RootPath, Does.EndWith(@"WebResources\scripts"));
+            Assert.That(project.WebResources.RootPath, Is.EqualTo(TestBench.PathTo(@"WebResources\scripts")));
             Assert.That(project.WebResources.Mappings, Has.Count.EqualTo(1));
+        }
+
+        [Test]
+        public void SamplePathsPointIntoTheTestBench()
+        {
+            var project = TestBench.LoadSampleProject("AutoDeployTest.adproj");
+
+            Assert.That(project.WatchFiles.Select(w => w.Path),
+                Is.EqualTo(new[]
+                {
+                    TestBench.PathTo(@"PluginAssembly\bin\Debug\net462\AutoDeployTest.Plugins.dll"),
+                    TestBench.PathTo(@"PluginPackage\bin\Debug\AutoDeployTest.Package.1.0.0.nupkg")
+                }));
+            Assert.That(project.WebResources.RootPath, Is.EqualTo(TestBench.PathTo("WebResources")));
+        }
+
+        // The templates must work for any clone, environment and publisher
+        [TestCase("AutoDeployTest.adproj")]
+        [TestCase("AutoDeployTest-Legacy.adproj")]
+        [TestCase("AutoDeployTest-OtherRoot.adproj")]
+        [TestCase("AutoDeployTest-WrongPackageId.adproj")]
+        public void TemplatesUsePlaceholders(string fileName)
+        {
+            var text = File.ReadAllText(TestBench.PathTo(Path.Combine("Projects", fileName)));
+
+            Assert.That(text, Does.Not.Match(@"[A-Za-z]:\\"), "absolute path");
+            Assert.That(text, Does.Not.Match(@">[a-z0-9]+_[/A-Z]"), "concrete publisher prefix");
         }
 
         [Test]
@@ -83,16 +111,16 @@ namespace XrmToolBox.AutoDeployer.Tests
                 WebResources = new WebResourceWatchConfig
                 {
                     RootPath = @"C:\src\wr",
-                    Prefix = "biz_/app",
+                    Prefix = "adt_/app",
                     Patterns = "*.js",
                     PublishEnabled = true,
                     DebounceMs = 900
                 }
             };
-            project.WebResources.Mappings.Add(new WebResourceMapping { CrmName = "biz_/app/a.js", RelativePath = "a.js", IsActive = true });
-            project.WebResources.Mappings.Add(new WebResourceMapping { CrmName = "biz_/app/b.js", RelativePath = "b.js", IsActive = false });
+            project.WebResources.Mappings.Add(new WebResourceMapping { CrmName = "adt_/app/a.js", RelativePath = "a.js", IsActive = true });
+            project.WebResources.Mappings.Add(new WebResourceMapping { CrmName = "adt_/app/b.js", RelativePath = "b.js", IsActive = false });
             project.WatchFiles.Add(new WatchFile { Type = WatchFileType.PluginAssembly, Path = @"C:\src\My.Plugins.dll" });
-            project.WatchFiles.Add(new WatchFile { Type = WatchFileType.PluginPackage, Path = @"C:\src\My.Package.1.0.0.nupkg", PackageId = PackageId, PackageName = "biz_My.Package" });
+            project.WatchFiles.Add(new WatchFile { Type = WatchFileType.PluginPackage, Path = @"C:\src\My.Package.1.0.0.nupkg", PackageId = PackageId, PackageName = "adt_My.Package" });
 
             ProjectFile.Save(project, tempFile);
             var loaded = ProjectFile.Load(tempFile);
@@ -102,18 +130,18 @@ namespace XrmToolBox.AutoDeployer.Tests
             Assert.That(loaded.WatchFiles[0].Path, Is.EqualTo(@"C:\src\My.Plugins.dll"));
             Assert.That(loaded.WatchFiles[1].Type, Is.EqualTo(WatchFileType.PluginPackage));
             Assert.That(loaded.WatchFiles[1].PackageId, Is.EqualTo(PackageId));
-            Assert.That(loaded.WatchFiles[1].PackageName, Is.EqualTo("biz_My.Package"));
+            Assert.That(loaded.WatchFiles[1].PackageName, Is.EqualTo("adt_My.Package"));
 
             var wr = loaded.WebResources;
             Assert.That(wr.RootPath, Is.EqualTo(@"C:\src\wr"));
-            Assert.That(wr.Prefix, Is.EqualTo("biz_/app"));
+            Assert.That(wr.Prefix, Is.EqualTo("adt_/app"));
             Assert.That(wr.Patterns, Is.EqualTo("*.js"));
             Assert.That(wr.PublishEnabled, Is.True);
             Assert.That(wr.DebounceMs, Is.EqualTo(900));
             Assert.That(wr.Mappings.Select(m => (m.CrmName, m.RelativePath, m.IsActive)), Is.EqualTo(new[]
             {
-                ("biz_/app/a.js", "a.js", true),
-                ("biz_/app/b.js", "b.js", false)
+                ("adt_/app/a.js", "a.js", true),
+                ("adt_/app/b.js", "b.js", false)
             }));
         }
 
@@ -132,12 +160,12 @@ namespace XrmToolBox.AutoDeployer.Tests
         [Test]
         public void WrongPackageIdSampleKeepsTheName()
         {
-            var project = ProjectFile.Load(TestBench.PathTo(@"Projects\AutoDeployTest-WrongPackageId.adproj"));
+            var project = TestBench.LoadSampleProject("AutoDeployTest-WrongPackageId.adproj");
 
             var package = project.WatchFiles.Single();
             Assert.That(package.Type, Is.EqualTo(WatchFileType.PluginPackage));
             Assert.That(package.PackageId, Is.EqualTo(new Guid("11111111-2222-3333-4444-555555555555")));
-            Assert.That(package.PackageName, Is.EqualTo("biz_AutoDeployTest.Package"));
+            Assert.That(package.PackageName, Is.EqualTo($"{TestBench.SamplePrefix}_AutoDeployTest.Package"));
         }
 
         #endregion Public Methods

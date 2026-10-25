@@ -1,18 +1,38 @@
-# Shared helper: connects to the test environment (Web API, client credentials).
-# Dot-source it: . "$PSScriptRoot\Dataverse.ps1"
+# Shared helper: reads the test bench settings and connects to the test environment (Web API,
+# client credentials). Dot-source it: . "$PSScriptRoot\Dataverse.ps1"
 #
-# The connection string (AuthType=ClientSecret;Url=...;ClientId=...;ClientSecret=...) comes from the
-# AUTODEPLOYER_TEST_CONNECTION environment variable, or else from Tests\connection.local.txt,
-# which is gitignored. The integration tests use the same two sources.
+# Settings come from Tests\testbench.local.json (gitignored), each one overridable by an environment
+# variable. The integration tests read them the same way.
+#   connection  AUTODEPLOYER_TEST_CONNECTION  AuthType=ClientSecret;Url=...;ClientId=...;ClientSecret=...
+#   publisher   AUTODEPLOYER_TEST_PUBLISHER   unique name of the publisher for the test components
+#   prefix      AUTODEPLOYER_TEST_PREFIX      that publisher's customization prefix
+# Without publisher/prefix, the test bench uses its own publisher AutoDeployTest (prefix adt).
 
 $ErrorActionPreference = 'Stop'
-$ConnectionFile = Join-Path (Split-Path (Split-Path $PSScriptRoot)) 'connection.local.txt'
 
-$cs = $env:AUTODEPLOYER_TEST_CONNECTION
-if (-not $cs) {
-    if (-not (Test-Path $ConnectionFile)) { throw "Set AUTODEPLOYER_TEST_CONNECTION or create $ConnectionFile" }
-    $cs = Get-Content $ConnectionFile -Raw
+$SettingsFile = Join-Path (Split-Path (Split-Path $PSScriptRoot)) 'testbench.local.json'
+$settings = if (Test-Path $SettingsFile) { Get-Content $SettingsFile -Raw | ConvertFrom-Json } else { [pscustomobject]@{} }
+function Get-Setting([string]$Name, [string]$Variable, [string]$Default) {
+    $value = [Environment]::GetEnvironmentVariable($Variable)
+    if (-not $value) { $value = $settings.$Name }
+    if (-not $value) { $value = $Default }
+    "$value".Trim()
 }
+
+$cs = Get-Setting 'connection' 'AUTODEPLOYER_TEST_CONNECTION' ''
+if (-not $cs) { throw "No connection string: set AUTODEPLOYER_TEST_CONNECTION or create $SettingsFile" }
+$script:PublisherName = Get-Setting 'publisher' 'AUTODEPLOYER_TEST_PUBLISHER' 'AutoDeployTest'
+$script:Prefix = Get-Setting 'prefix' 'AUTODEPLOYER_TEST_PREFIX' 'adt'
+
+# Names of everything the test bench registers. The integration tests and the sample projects use the same.
+$script:SolutionName = 'AutoDeployTest'
+$script:AssemblyName = 'AutoDeployTest.Plugins'
+$script:PackageName = "$($Prefix)_AutoDeployTest.Package"
+$script:WebResourcePrefix = "$($Prefix)_/autodeploytest"
+
+# Marks a publisher that Setup-Dataverse.ps1 created, so Cleanup-Dataverse.ps1 only removes that one
+$script:CreatedByTestBench = 'Created by the AutoDeployer test bench'
+
 $parts = @{}
 foreach ($p in $cs.Trim().Split(';')) { if ($p -match '^\s*([^=]+)=(.*)$') { $parts[$matches[1].Trim()] = $matches[2].Trim() } }
 $script:DvUrl = $parts['Url'].TrimEnd('/')

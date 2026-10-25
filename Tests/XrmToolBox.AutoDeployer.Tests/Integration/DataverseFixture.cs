@@ -17,7 +17,7 @@ namespace XrmToolBox.AutoDeployer.Tests.Integration
     {
         #region Protected Fields
 
-        protected const string PackageName = "biz_AutoDeployTest.Package";
+        protected static readonly string PackageName = $"{TestBench.Settings.Prefix}_AutoDeployTest.Package";
 
         #endregion Protected Fields
 
@@ -51,10 +51,10 @@ namespace XrmToolBox.AutoDeployer.Tests.Integration
         [OneTimeSetUp]
         public void Connect()
         {
-            var cs = TestBench.ConnectionString();
+            var cs = TestBench.Settings.Connection;
             if (string.IsNullOrWhiteSpace(cs))
             {
-                Assert.Ignore("No connection string: set AUTODEPLOYER_TEST_CONNECTION or create Tests\\connection.local.txt");
+                Assert.Ignore("No connection string: set AUTODEPLOYER_TEST_CONNECTION or create Tests\\testbench.local.json");
             }
             if (!File.Exists(AssemblyPath) || PackagePath == null)
             {
@@ -71,7 +71,7 @@ namespace XrmToolBox.AutoDeployer.Tests.Integration
             PackageId = FindId("pluginpackage", "name", PackageName);
             if (AssemblyId == Guid.Empty || PackageId == Guid.Empty)
             {
-                Assert.Ignore("Test components not found: run Tests\\TestBench\\Scripts\\Setup-Dataverse.ps1");
+                Assert.Ignore($"Test components with prefix '{TestBench.Settings.Prefix}' not found: run Tests\\TestBench\\Scripts\\Setup-Dataverse.ps1 with the same settings");
             }
 
             TempFolder = Path.Combine(Path.GetTempPath(), "AutoDeployerTests-" + Guid.NewGuid().ToString("N"));

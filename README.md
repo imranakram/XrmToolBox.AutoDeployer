@@ -209,8 +209,9 @@ If you contribute:
 - Build `XrmToolBox.AutoDeployer.sln`. A Debug build puts the plugin in `bin\Debug\Plugins`, next to an
   `XrmToolBox.exe` you can start for debugging
 - `Tests\XrmToolBox.AutoDeployer.Tests` has unit tests, which CI runs on every pull request, and integration
-  tests against a real Dataverse environment, which only run locally once you've set up a connection
-- How to set up the test environment and connection string, run the tests, and the manual test plan:
+  tests against a real Dataverse environment, which only run locally once you've set up a connection string,
+  publisher and prefix in `Tests\testbench.local.json`
+- How to set up the test environment and those settings, run the tests, and the manual test plan:
   [Tests/TestBench/README.md](https://github.com/imranakram/XrmToolBox.AutoDeployer/blob/master/Tests/TestBench/README.md)
 
 ---
